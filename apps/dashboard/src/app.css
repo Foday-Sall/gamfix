@@ -1,89 +1,9 @@
 /* Small layout utilities shared by pages (in addition to StyleX styles). */
 
-body {
-  font-family: 'Source Sans 3', 'Lexend', system-ui, -apple-system, sans-serif;
-}
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Lexend', 'Source Sans 3', sans-serif;
-}
-
 .page {
   width: 100%;
   max-width: 1180px;
   margin-inline: auto;
-}
-
-/* Astryx-template page header: live badge, title, subtitle, refresh action */
-.page-head-block {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
-
-.page-head-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.page-title {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  margin: 0;
-}
-
-.page-subtitle {
-  margin: 0;
-  font-size: 14px;
-  color: var(--color-text-secondary, #5b6259);
-}
-
-.refresh-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 16px;
-  border-radius: 10px;
-  border: 1px solid var(--color-border, rgba(5, 54, 89, 0.14));
-  background: transparent;
-  color: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.refresh-btn:hover {
-  background: color-mix(in srgb, currentColor 5%, transparent);
-}
-
-.refresh-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.refresh-btn .spin {
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Institution metric tiles (Astryx dashboard template) */
-.tile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
 }
 
 .stat-grid {

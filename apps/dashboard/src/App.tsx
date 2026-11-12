@@ -7,7 +7,6 @@ import { Layout } from './components/Layout'
 import { Loading, PageHead } from './components/ui'
 import { Login } from './pages/Login'
 import { Overview } from './pages/Overview'
-import { Trends } from './pages/Trends'
 import { Complaints } from './pages/Complaints'
 import { MapPage } from './pages/MapPage'
 import { InstitutionsPage } from './pages/InstitutionsPage'
@@ -65,8 +64,6 @@ function Console({ session }: { session: Session }) {
         return <Complaints canForward={isAdmin} />
       case '/map':
         return <MapPage session={session} />
-      case '/trends':
-        return session.role === 'officer' ? <Trends /> : <Denied />
       case '/institutions':
         return isAdmin ? <InstitutionsPage /> : <Denied />
       case '/accounts':

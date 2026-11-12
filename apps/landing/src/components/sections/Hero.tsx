@@ -32,7 +32,7 @@ export default function Hero({ reduce }: { reduce: boolean | null }) {
           </motion.p>
           <motion.div variants={fadeUp()} className="mt-9 flex flex-wrap items-center gap-3">
             <Button asChild size="lg">
-              <a href="https://gamciv.pocketsoftware.dev/app">Get started</a>
+              <a href="/login">Get started</a>
             </Button>
             <Button asChild size="lg" variant="outline">
               <a href="#how">See how it works</a>

@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url"
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
+  // Landing lives under /landing/ on the VPS so the citizen app (base "/")
+  // can own the root paths: /, /login, /signup, /home, /report, ...
+  // "/" itself is served from the landing build by the container nginx.
+  base: "/landing/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

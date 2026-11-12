@@ -16,7 +16,7 @@ export default function CTA() {
           </p>
           <Lift className="mt-8 inline-block">
             <Button asChild size="lg">
-              <a href="https://gamciv.pocketsoftware.dev/app">Get started</a>
+              <a href="/login">Get started</a>
             </Button>
           </Lift>
           <p className="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground">

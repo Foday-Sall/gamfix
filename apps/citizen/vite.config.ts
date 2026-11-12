@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url"
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-  base: "/app/",
+  base: "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

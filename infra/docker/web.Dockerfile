@@ -1,10 +1,8 @@
 # GamFix web container: builds the citizen app + landing + dashboard from
-# source and serves everything through one nginx, mirroring the VPS layout:
-#   /        -> landing
-#   /app/    -> citizen app (base /app/)
-#   /dash/   -> staff console (Astryx build output in apps/dashboard/dist)
-# TLS is expected to terminate in front of this container (host nginx,
-# Cloudflare, or a reverse proxy of your choice).
+# source and serves everything through one nginx. Path scheme (since
+# 2026-11-12): citizen app at ROOT paths (/login, /signup, /home, ...),
+# landing at "/" only (files under /landing/), dashboard at /dash/.
+# TLS is expected to terminate in front of this container (host nginx).
 FROM node:20-alpine AS build
 
 WORKDIR /src
@@ -22,8 +20,13 @@ RUN npm run build --prefix citizen \
 FROM nginx:1.27-alpine
 
 COPY infra/docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /src/landing/dist  /usr/share/nginx/html
-COPY --from=build /src/citizen/dist  /usr/share/nginx/html/app
+# Citizen app at root (base "/"): index.html + /assets + public files
+COPY --from=build /src/citizen/dist  /usr/share/nginx/html
+# Landing under /landing/ (base "/landing/"); "/" is served from it
+COPY --from=build /src/landing/dist  /usr/share/nginx/html/landing
+# Landing-only public asset referenced from the root (og:image meta)
+COPY --from=build /src/landing/dist/og-image.svg /usr/share/nginx/html/og-image.svg
+# Staff dashboard
 COPY --from=build /src/dashboard-dist /usr/share/nginx/html/dash
 
 EXPOSE 80

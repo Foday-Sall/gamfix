@@ -18,7 +18,8 @@ path** — Cloudflare DNS is authoritative but both records are DNS-only
 | URL | Serves |
 | --- | --- |
 | `https://gamfix.pocketsoftware.dev/` | landing |
-| `https://gamfix.pocketsoftware.dev/app/` | citizen app |
+| `https://gamfix.pocketsoftware.dev/login` (+ `/signup`, `/home`, `/report`, `/track`, `/profile`, `/my-reports`, `/verify/…`, `/forgot-password`, `/reset-password`) | citizen app — root paths |
+| `https://gamfix.pocketsoftware.dev/app/…` | 301 → root equivalents (legacy) |
 | `https://gamfix.pocketsoftware.dev/dash/` | staff dashboard |
 | `https://gamfix.pocketsoftware.dev/api/…` | PocketBase (same origin) |
 | `https://15.224.0.22.sslip.io/…` | identical stack, direct-to-VPS fallback |
@@ -38,7 +39,12 @@ path** — Cloudflare DNS is authoritative but both records are DNS-only
 - **Both frontends are built same-origin** (`VITE_POCKETBASE_URL=/`, the
   dashboard dist bundles patched to base `/`): whatever domain serves the
   app also serves the API, so there is no CORS and the Google OAuth
-  redirect URI always matches the current origin.
+  redirect URI always matches the current origin. The citizen app builds
+  with vite base `/` (root paths — `/login`, `/signup`, `/home`, …) and
+  the landing with vite base `/landing/` (so `/` stays the marketing page
+  and its "Get started" CTA links to `/login`); container nginx redirects
+  legacy `/app/*` URLs to the root equivalents. PB `meta.appURL` is
+  `https://gamfix.pocketsoftware.dev` (used by hooks for file/email URLs).
 - **Certificates**: `certbot` webroot (`/var/www/certbot`).
   `/opt/gamfix-src/cert-issue.sh` + `gamfix-cert-issue.timer` retry
   issuance every 30 min until a domain's DNS points here, then disable

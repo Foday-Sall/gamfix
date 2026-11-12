@@ -1,0 +1,23 @@
+[Unit]
+Description=PocketBase backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/opt/pocketbase/gowa.env
+Type=simple
+User=pocketbase
+Group=pocketbase
+WorkingDirectory=/opt/pocketbase
+ExecStart=/opt/pocketbase/pocketbase serve --http=127.0.0.1:8090 --hooksDir=/opt/pocketbase/pb_hooks
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=4096
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/pocketbase
+
+[Install]
+WantedBy=multi-user.target

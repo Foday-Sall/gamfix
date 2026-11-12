@@ -1,0 +1,15 @@
+/login            /app/app 200
+/signup           /app/app 200
+/forgot-password  /app/app 200
+/reset-password   /app/app 200
+/onboarding       /app/app 200
+/verify/email     /app/app 200
+/verify/phone     /app/app 200
+/report           /app/app 200
+/my-reports       /app/app 200
+/profile          /app/app 200
+/institute        /app/app 200
+/track            /app/app 200
+/home             /app/app 200
+/privacy          /landing 200
+/terms            /landing 200

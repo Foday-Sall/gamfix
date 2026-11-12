@@ -1,0 +1,16 @@
+# dependencies / builds
+node_modules/
+dist/
+dist-pages/
+.localserve/
+
+# secrets (never commit real credentials)
+gowa.env
+.env.local
+*.pem
+
+# misc
+.DS_Store
+*.log
+playwright-report/
+test-results/

@@ -14,3 +14,10 @@
 /home             /app/app 200
 /privacy          /landing 200
 /terms            /landing 200
+
+# deep-link safety net for stale dashboard bundles (they navigate to /app/*)
+/app/login    /app/app 200
+/app/home     /app/app 200
+/app/signup   /app/app 200
+/app/report   /app/app 200
+/app/track    /app/app 200

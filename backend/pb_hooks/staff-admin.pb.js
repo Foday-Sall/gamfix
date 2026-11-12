@@ -258,35 +258,62 @@ routerAdd('POST', '/api/gamfix/staff/complaint', (e) => {
     const iso = (field) => {
       try { const t = new Date(row.getDateTime(field).string()); return isNaN(t.getTime()) ? null : t.toISOString() } catch (_) { return null }
     }
+    // Absolute origin for file URLs — request host first (nginx passes the
+    // public Host; static hosts like Cloudflare Pages swallow relative /api/*
+    // into their SPA fallback), then the configured appURL.
+    const fileBase = () => {
+      let host = ''
+      try { host = String(e.request.Host || e.request.host || '') } catch (_) {}
+      if (host) {
+        let proto = ''
+        try { proto = String(e.request.Header.Get('X-Forwarded-Proto') || e.request.header.Get('X-Forwarded-Proto') || '') } catch (_) {}
+        return (proto || 'https').toLowerCase() + '://' + host
+      }
+      try {
+        const m = $app.settings().meta
+        const u = String(m.appURL || m.appUrl || '')
+        if (u) return u
+      } catch (_) {}
+      return 'https://15.224.0.22.sslip.io'
+    }
+    const fileUrl = (collection, recordId, name) =>
+      fileBase().replace(/\/?$/, '/') + 'api/files/' + collection + '/' + recordId + '/' + name
+
     let photoUrl = null
     let resolutionPhotoUrl = null
     let photos = []
     try { photos = row.get('photos') || [] } catch (_) { photos = [] }
     if (!Array.isArray(photos)) photos = []
     if (photos.length) {
-      // Absolute file URL on the origin the request actually hit (nginx passes
-      // the public Host; static hosts like Cloudflare Pages swallow relative
-      // /api/* into their SPA fallback). The dashboard still appends its own
-      // file token (pb.files.getToken()) which PocketBase validates against
-      // the complaints view rule — officers pass via the staff scope.
-      const fileBase = () => {
-        let host = ''
-        try { host = String(e.request.Host || e.request.host || '') } catch (_) {}
-        if (host) {
-          let proto = ''
-          try { proto = String(e.request.Header.Get('X-Forwarded-Proto') || e.request.header.Get('X-Forwarded-Proto') || '') } catch (_) {}
-          return (proto || 'https').toLowerCase() + '://' + host
-        }
-        try {
-          const m = $app.settings().meta
-          const u = String(m.appURL || m.appUrl || '')
-          if (u) return u
-        } catch (_) {}
-        return 'https://15.224.0.22.sslip.io'
-      }
-      const base = fileBase().replace(/\/?$/, '/')
-      photoUrl = base + 'api/files/complaints/' + row.id + '/' + String(photos[0])
+      // The dashboard appends its own file token (pb.files.getToken()) which
+      // PocketBase validates against the complaints view rule — officers pass
+      // via the staff scope.
+      photoUrl = fileUrl('complaints', row.id, String(photos[0]))
     }
+    // Resolution evidence: prefer the managed file uploaded with the fix
+    // report; fall back to the legacy externally-attached URL. Both were
+    // previously hard-coded to null here, so an attached proof never showed.
+    // NOTE: maxSelect=1 file fields come back as a STRING, not an array.
+    try {
+      let rp = null
+      try { rp = row.get('resolution_photos') } catch (_) { rp = null }
+      let rpName = ''
+      if (typeof rp === 'string') rpName = rp
+      else if (rp) {
+        const arr = Array.from(rp)
+        if (arr.length) rpName = String(arr[0])
+      }
+      if (rpName) {
+        resolutionPhotoUrl = fileUrl('complaints', row.id, rpName)
+      } else {
+        const stored = String(row.getString('resolution_photo_url') || '')
+        if (stored) {
+          resolutionPhotoUrl = /^https?:\/\//i.test(stored)
+            ? stored
+            : fileBase().replace(/\/?$/, '/') + stored.replace(/^\//, '')
+        }
+      }
+    } catch (_) { resolutionPhotoUrl = null }
 
     return e.json(200, {
       ok: true,
@@ -445,6 +472,9 @@ routerAdd('POST', '/api/gamfix/staff/status', (e) => {
 }, $apis.requireAuth('users'))
 
 // ---- POST /api/gamfix/staff/resolution (fn_officer_report_resolution) -------
+// p_resolution_photo_url accepts either a legacy http(s) proof URL or a
+// data:image/(jpeg|png|webp);base64 payload from the console photo picker
+// (decoded server-side, magic-byte sniffed, stored as a protected file).
 routerAdd('POST', '/api/gamfix/staff/resolution', (e) => {
   try {
     if (!e.auth) return e.json(200, false)
@@ -452,7 +482,11 @@ routerAdd('POST', '/api/gamfix/staff/resolution', (e) => {
     try { const info = e.requestInfo(); if (info && info.body && typeof info.body === 'object') body = info.body } catch (_) {}
     const photo = body.p_resolution_photo_url == null ? null : String(body.p_resolution_photo_url)
     const message = body.p_citizen_message == null ? null : String(body.p_citizen_message)
-    if (!e.auth || !message || message.trim().length < 5 || photo !== null) return e.json(200, false)
+    const photoIsUrl = photo !== null && /^https?:\/\/\S+$/i.test(photo) && photo.length <= 2000
+    const photoIsData = photo !== null &&
+      /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(photo) && photo.length <= 9000000
+    if (!e.auth || !message || message.trim().length < 5 ||
+        (photo !== null && !photoIsUrl && !photoIsData)) return e.json(200, false)
 
     // Same server-verified transition as fn_officer_set_status('citizen_confirmation').
     const user = $app.findRecordById('users', e.auth.id)
@@ -471,17 +505,94 @@ routerAdd('POST', '/api/gamfix/staff/resolution', (e) => {
     if (!row || (!isAdmin && row.getString('institution') !== instIdField)) return e.json(200, false)
     if (row.getString('status') !== 'in_progress') return e.json(200, false)
 
+    // Decode + sniff the uploaded proof photo before trusting it.
+    let photoBytes = null
+    let photoName = null
+    let photoUrl = null
+    if (photoIsData) {
+      const b64 = photo.slice(photo.indexOf(',') + 1)
+      // goja does not always expose atob — pure-JS fallback keeps this working.
+      const b64decode = (s) => {
+        if (typeof atob === 'function') { try { return atob(s) } catch (_) {} }
+        const CH = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
+        let out = '', bits = 0, acc = 0
+        for (let i = 0; i < s.length; i++) {
+          const v = CH.indexOf(s[i])
+          if (v < 0 || v === 64) continue
+          acc = (acc << 6) | v
+          bits += 6
+          if (bits >= 8) { bits -= 8; out += String.fromCharCode((acc >> bits) & 0xff) }
+        }
+        return out
+      }
+      let bytes = ''
+      try { bytes = b64decode(b64) } catch (_) { bytes = '' }
+      if (!bytes) return e.json(200, false)
+      // Magic bytes decide the extension — never the client-supplied string.
+      let ext = null
+      if (bytes.length > 3 && bytes.charCodeAt(0) === 0xff && bytes.charCodeAt(1) === 0xd8 &&
+          bytes.charCodeAt(2) === 0xff) ext = 'jpg'
+      else if (bytes.length > 8 && bytes.charCodeAt(0) === 0x89 && bytes.charCodeAt(1) === 0x50 &&
+               bytes.charCodeAt(2) === 0x4e && bytes.charCodeAt(3) === 0x47) ext = 'png'
+      else if (bytes.length > 12 && bytes.slice(0, 4) === 'RIFF' && bytes.slice(8, 12) === 'WEBP') ext = 'webp'
+      if (!ext || bytes.length > 6500000) return e.json(200, false)
+      // Pass a Uint8Array, not a string: goja UTF-8-encodes JS strings on the
+      // JS→Go boundary, which corrupts binary payloads (mime sniffing fails).
+      const photoU8 = new Uint8Array(bytes.length)
+      for (let i = 0; i < bytes.length; i++) photoU8[i] = bytes.charCodeAt(i)
+      photoBytes = photoU8
+      photoName = 'resolution_' + Date.now() + '.' + ext
+    } else if (photoIsUrl) {
+      photoUrl = photo
+    }
+
+    // Absolute origin for the stored proof URL (request host first, then appURL).
+    const fileBase = () => {
+      let host = ''
+      try { host = String(e.request.Host || e.request.host || '') } catch (_) {}
+      if (host) {
+        let proto = ''
+        try { proto = String(e.request.Header.Get('X-Forwarded-Proto') || e.request.header.Get('X-Forwarded-Proto') || '') } catch (_) {}
+        return (proto || 'https').toLowerCase() + '://' + host
+      }
+      try {
+        const m = $app.settings().meta
+        const u = String(m.appURL || m.appUrl || '')
+        if (u) return u
+      } catch (_) {}
+      return 'https://15.224.0.22.sslip.io'
+    }
+
     const trimmed = message.trim()
     $app.runInTransaction((tx) => {
       row.set('status', 'citizen_confirmation')
       row.set('resolved_at', new Date().toISOString())
       row.set('resolution_note', trimmed)
+      if (photoBytes !== null) {
+        row.set('resolution_photos', $filesystem.fileFromBytes(photoBytes, photoName))
+        row.set('resolution_photo_url', fileBase().replace(/\/?$/, '/') + 'api/files/complaints/' + row.id + '/' + photoName)
+      } else if (photoUrl !== null) {
+        row.set('resolution_photo_url', photoUrl)
+      }
       tx.save(row)
+      // PocketBase renames stored files (random suffix) — record the FINAL
+      // public URL so the legacy text field matches the managed file.
+      if (photoBytes !== null) {
+        let savedName = ''
+        try {
+          const saved = row.get('resolution_photos')
+          savedName = typeof saved === 'string' ? saved : (saved && saved.length ? String(saved[0]) : '')
+        } catch (_) {}
+        if (savedName) {
+          row.set('resolution_photo_url', fileBase().replace(/\/?$/, '/') + 'api/files/complaints/' + row.id + '/' + savedName)
+          tx.save(row)
+        }
+      }
 
       const update = new Record($app.findCollectionByNameOrId('complaint_updates'))
       update.set('complaint', row.id)
       update.set('status', 'citizen_confirmation')
-      update.set('message', 'Fix reported: ' + trimmed)
+      update.set('message', 'Fix reported: ' + trimmed + (photoBytes !== null || photoUrl !== null ? ' (with proof photo)' : ''))
       update.set('update_type', 'status')
       update.set('actor_label', 'officer')
       update.set('actor', isOfficer ? rows[0].getString('name') : 'administrator')
@@ -492,7 +603,8 @@ routerAdd('POST', '/api/gamfix/staff/resolution', (e) => {
       tx.save(update)
     })
     return e.json(200, true)
-  } catch (_) {
+  } catch (err) {
+    console.log('GamFix staff resolution failed:', String(err || err))
     return e.json(200, false)
   }
 }, $apis.requireAuth('users'))

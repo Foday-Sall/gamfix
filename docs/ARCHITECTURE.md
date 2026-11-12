@@ -23,7 +23,7 @@ citizen app at its routes; the Pages bundle calls the VPS PocketBase API.
 | --- | --- |
 | `apps/citizen/` | Citizen app — React + Vite + Tailwind, talks to PocketBase via the official JS SDK. Routes: `/login`, `/signup`, `/report`, `/track`, `/my-reports`, `/profile`, `/onboarding`, `/verify/email`, `/verify/phone`, `/forgot-password`, `/reset-password`, `/institute`, `/home`. |
 | `apps/landing/` | Marketing site. Static, no API calls. |
-| `apps/dashboard/` | Staff/admin console. **Dist snapshot only — source was lost** (was a separate build phase). Deploy as-is. |
+| `apps/dashboard/` | Staff/admin console — **React 19 + Vite + Astryx (Matcha theme)**, rebuilt from source. Pages: overview with charts, complaints + lifecycle actions, live map, institutions, accounts, access control, audit log, WhatsApp devices, settings. `dist/` is committed for docker deploys. |
 | `backend/pb_hooks/` | The whole API layer. PocketBase executes these JS hooks on every request — there is no other custom backend code. |
 | `backend/pb_migrations/` | Schema migrations; run automatically when PocketBase starts. |
 
@@ -89,7 +89,7 @@ with the dev environment. What is current in this repo:
   the `basename`-from-`BASE_URL` router fix, which IS applied here.
 
 The compiled production citizen app + dashboard are preserved in
-`apps/dashboard/` (dashboard) — for the citizen app, rebuild from source.
+`apps/dashboard/` (staff console, build with `npm run build` in that folder).
 
 ## History
 

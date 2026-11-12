@@ -1,6 +1,7 @@
 # dependencies / builds
 node_modules/
 dist/
+!apps/dashboard/dist/
 dist-pages/
 .localserve/
 

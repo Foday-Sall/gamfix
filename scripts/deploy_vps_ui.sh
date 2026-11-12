@@ -2,7 +2,7 @@
 # Deploy GamFix to the production VPS (bare-metal layout, not Docker):
 #   - citizen app   -> /opt/gamfix-pocket/app
 #   - landing       -> /opt/gamfix-pocket/landing
-#   - dashboard     -> /opt/gamfix-pocket/dash   (dist snapshot, no build)
+#   - dashboard     -> /opt/gamfix-pocket/dash   (Astryx staff console build output)
 #   - PB hooks + migrations -> /opt/pocketbase/pb_hooks + pb_migrations, restart PB
 #
 # Run ON the VPS with the repo checked out at ~/gamfix-SL
@@ -38,9 +38,9 @@ deploy_landing() {
 }
 
 deploy_dashboard() {
-  # Dashboard source is lost; apps/dashboard is the exact production dist.
-  $SUDO rsync -a --delete "$REPO/apps/dashboard/" "$VPS_DIR/dash/"
-  echo "dashboard deployed (dist snapshot, no build)"
+  # Staff console ships prebuilt: apps/dashboard/dist (build with npm run build).
+  $SUDO rsync -a --delete "$REPO/apps/dashboard/dist/" "$VPS_DIR/dash/"
+  echo "dashboard deployed (apps/dashboard/dist)"
 }
 
 deploy_server() {

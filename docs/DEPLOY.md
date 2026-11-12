@@ -157,7 +157,7 @@ npm ci --prefix apps/landing && npm run build --prefix apps/landing
 sudo mkdir -p /opt/gamfix-pocket
 sudo rsync -a --delete apps/landing/dist/ /opt/gamfix-pocket/landing/
 sudo rsync -a --delete apps/citizen/dist/ /opt/gamfix-pocket/app/
-sudo rsync -a --delete apps/dashboard/  /opt/gamfix-pocket/dash/
+sudo rsync -a --delete apps/dashboard/dist/ /opt/gamfix-pocket/dash/
 ```
 
 ---

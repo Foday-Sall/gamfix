@@ -1,0 +1,153 @@
+/* Small layout utilities shared by pages (in addition to StyleX styles). */
+
+.page {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.select {
+  appearance: none;
+  height: 32px;
+  padding: 0 26px 0 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  background-color: transparent;
+  font-size: 13px;
+  color: inherit;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  cursor: pointer;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--color-accent, #2e7d4f);
+  outline-offset: 1px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 18px;
+}
+
+.detail-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+.photo-frame img {
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.action-box {
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Complaint feed table */
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.cmp-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+}
+
+.cmp-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  vertical-align: middle;
+}
+
+.cmp-table tbody tr {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.cmp-table tbody tr:hover {
+  background-color: color-mix(in srgb, var(--color-accent, #2e7d4f) 6%, transparent);
+}
+
+.cmp-table tbody tr:focus-visible {
+  outline: 2px solid var(--color-accent, #2e7d4f);
+  outline-offset: -2px;
+}
+
+.cmp-table .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cmp-table .title-cell {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* Professional headings: keep matcha colors, use the body face for chrome */
+[data-astryx-theme] :where(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--font-family-body, 'DM Sans', sans-serif);
+  letter-spacing: -0.01em;
+}

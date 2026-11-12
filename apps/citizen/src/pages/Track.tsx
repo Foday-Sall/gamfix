@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { handleAuthExpired, isAuthError, isNetworkError, supabase } from '@/lib/supabase'
+import { handleAuthExpired, isAuthError, isNetworkError, pbApi } from '@/lib/pocketbase'
 import { statusMeta } from '@/lib/gamciv'
 import { useSession } from '@/hooks/useSession'
 
@@ -98,7 +98,7 @@ export default function Track() {
     setCanConfirm(false)
     setCitizenActionError(null)
     try {
-      const { data, error } = await supabase.rpc('track_complaint', {
+      const { data, error } = await pbApi.rpc('track_complaint', {
         p_tracking_no: raw,
       })
       if (error) {
@@ -139,7 +139,7 @@ export default function Track() {
     }
     setRefreshingStatus(true)
     try {
-      const { data, error } = await supabase.rpc('track_complaint', { p_tracking_no: ref })
+      const { data, error } = await pbApi.rpc('track_complaint', { p_tracking_no: ref })
       if (error) {
         if (isAuthError(error)) {
           if (!quiet) toast.error('Your session has expired. Please sign in again.')
@@ -175,7 +175,7 @@ export default function Track() {
     }
     void (async () => {
       try {
-        const { data, error } = await supabase.rpc('fn_can_confirm_report', { p_tracking_no: result.tracking_no })
+        const { data, error } = await pbApi.rpc('fn_can_confirm_report', { p_tracking_no: result.tracking_no })
         if (active) setCanConfirm(!error && data === true)
       } catch {
         if (active) setCanConfirm(false)
@@ -194,8 +194,8 @@ export default function Track() {
     setCitizenActionError(null)
     try {
       const { data, error } = action === 'confirm'
-        ? await supabase.rpc('confirm_complaint', { p_tracking_no: result.tracking_no, p_phone: null })
-        : await supabase.rpc('reopen_complaint', {
+        ? await pbApi.rpc('confirm_complaint', { p_tracking_no: result.tracking_no, p_phone: null })
+        : await pbApi.rpc('reopen_complaint', {
             p_tracking_no: result.tracking_no,
             p_reason: reopenReason.trim(),
             p_phone: null,

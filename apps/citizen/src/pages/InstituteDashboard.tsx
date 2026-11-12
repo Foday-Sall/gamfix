@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/chart'
 import { Bar, BarChart, CartesianGrid, Area, AreaChart, XAxis, YAxis, Pie, PieChart, Cell, RadialBar, RadialBarChart, PolarAngleAxis } from 'recharts'
 import { useSession } from '@/hooks/useSession'
-import { supabase, getProfile } from '@/lib/supabase'
+import { pbApi, getProfile } from '@/lib/pocketbase'
 import { statusMeta } from '@/lib/gamciv'
 import GamFixMark from '@/components/GamFixMark'
 import type { Complaint } from '@/lib/types'
@@ -158,7 +158,7 @@ export default function InstituteDashboard() {
   /** Full load of the institution's complaint feed (newest first). */
   const loadFeed = useCallback(async (institutionId: string) => {
     setLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await pbApi
       .from('complaints')
       .select(
         'id, tracking_no, title, description, urgency, status, created_at, updated_at, citizen_name, citizen_phone, resolution_photo_url, institution_id, categories(name)',
@@ -204,7 +204,7 @@ export default function InstituteDashboard() {
   useEffect(() => {
     const institutionId = staff?.institutionId
     if (!institutionId) return
-    const channel = supabase
+    const channel = pbApi
       .channel(`institute-complaints-${institutionId}`)
       .on(
         'postgres_changes',
@@ -240,7 +240,7 @@ export default function InstituteDashboard() {
       )
       .subscribe()
     return () => {
-      void supabase.removeChannel(channel)
+      void pbApi.removeChannel(channel)
     }
   }, [staff?.institutionId])
 
@@ -249,7 +249,7 @@ export default function InstituteDashboard() {
     const institutionId = staff?.institutionId
     if (!institutionId) return
     let alive = true
-    supabase
+    pbApi
       .from('institutions')
       .select('logo')
       .eq('id', institutionId)

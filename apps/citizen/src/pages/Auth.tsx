@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
-import { supabase, routeByRole } from '@/lib/supabase'
+import { pbApi, routeByRole } from '@/lib/pocketbase'
 import { friendlyAuthError } from '@/lib/authErrors'
 import gamfixLogo from '@/assets/gamfix-logo.png'
 import { Button } from '@/components/ui/button'
@@ -160,7 +160,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
   // to a citizen, institution staff member, or the sole administrator.
   useEffect(() => {
     let cancelled = false
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    pbApi.auth.getSession().then(async ({ data: { session } }) => {
       if (cancelled || !session) return
       const role = await routeByRole()
       if (cancelled) return
@@ -196,7 +196,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
     setBusy('form')
     try {
       if (isSignup) {
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await pbApi.auth.signUp({
           email: email.trim(),
           password,
           options: { data: { full_name: name.trim() } },
@@ -227,7 +227,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           switchMode('signin')
         }
       } else {
-        const { error, data: loginData } = await supabase.auth.signInWithPassword({
+        const { error, data: loginData } = await pbApi.auth.signInWithPassword({
           email: email.trim(),
           password,
         })
@@ -276,7 +276,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
     setBusy('google')
     try {
       const redirectTo = `${window.location.origin}/app/`
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { error } = await pbApi.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo },
       })

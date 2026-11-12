@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { supabase } from '@/lib/supabase'
+import { pbApi } from '@/lib/pocketbase'
 import { SignOutDialog } from '@/components/ConfirmDialogs'
 
 export const APP_VERSION = '1.1.0'
@@ -53,7 +53,7 @@ export default function Profile() {
     let cancelled = false
     const uid = session?.user.id
     if (!uid) return
-    supabase
+    pbApi
       .from('profiles')
       .select('full_name, avatar_url')
       .eq('user_id', uid)
@@ -71,7 +71,7 @@ export default function Profile() {
 
   async function signOut() {
     setSigningOut(true)
-    const { error } = await supabase.auth.signOut()
+    const { error } = await pbApi.auth.signOut()
     setSigningOut(false)
     setConfirmOpen(false)
     if (error) {
@@ -92,7 +92,7 @@ export default function Profile() {
     }
     setSavingName(true)
     setMsg(null)
-    const { error } = await supabase
+    const { error } = await pbApi
       .from('profiles')
       .update({ full_name: trimmed })
       .eq('user_id', uid)
@@ -103,7 +103,7 @@ export default function Profile() {
     }
     setSavedName(trimmed)
     // Refresh auth metadata so other pages show the new name right away.
-    await supabase.auth.updateUser({ data: { full_name: trimmed } })
+    await pbApi.auth.updateUser({ data: { full_name: trimmed } })
     setMsg({ kind: 'ok', text: 'Name updated.' })
   }
 
@@ -126,13 +126,13 @@ export default function Profile() {
       const uid = session.user.id
       const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
       const path = `${uid}/${Date.now()}.${ext}`
-      const { error } = await supabase.storage
+      const { error } = await pbApi.storage
         .from('avatars')
         .upload(path, file, { cacheControl: '3600', upsert: false })
       if (error) throw error
-      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      const { data } = pbApi.storage.from('avatars').getPublicUrl(path)
       // Save URL to the profile row (owner-only, guarded by RLS).
-      const { error: dbErr } = await supabase
+      const { error: dbErr } = await pbApi
         .from('profiles')
         .update({ avatar_url: data.publicUrl })
         .eq('user_id', uid)

@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getProfile, isGoogleAuthUser, pb, supabase } from '@/lib/supabase'
+import { getProfile, isGoogleAuthUser, pb, pbApi } from '@/lib/pocketbase'
 
 const OTP_LENGTH = 6
 
@@ -92,7 +92,7 @@ export default function VerifyPhone() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const { data } = await supabase.auth.getSession()
+      const { data } = await pbApi.auth.getSession()
       if (!data.session) {
         navigate('/login', { replace: true })
         return
@@ -295,7 +295,7 @@ export default function VerifyPhone() {
             <button
               type="button"
               onClick={async () => {
-                await supabase.auth.signOut()
+                await pbApi.auth.signOut()
                 navigate('/login', { replace: true })
               }}
               className="font-medium text-primary underline underline-offset-2"

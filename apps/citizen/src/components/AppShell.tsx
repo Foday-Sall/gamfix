@@ -35,7 +35,7 @@ import {
 import { SignOutDialog } from '@/components/ConfirmDialogs'
 import PageTransition from '@/components/PageTransition'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { supabase, getProfile, isGoogleAuthUser, STAFF_DASHBOARD_URL } from '@/lib/supabase'
+import { pbApi, getProfile, isGoogleAuthUser, STAFF_DASHBOARD_URL } from '@/lib/pocketbase'
 import GamFixMark from '@/components/GamFixMark'
 import { toast } from 'sonner'
 import gamfixLogo from '@/assets/gamfix-logo.png'
@@ -124,7 +124,7 @@ export default function AppShell() {
     let cancelled = false
     void (async () => {
       try {
-        const { data, error } = await supabase.rpc('fn_dashboard_access')
+        const { data, error } = await pbApi.rpc('fn_dashboard_access')
         if (cancelled || error) return
         const access = data as { ok?: boolean; role?: string | null } | null
         if (access?.ok && (access.role === 'officer' || access.role === 'admin')) {
@@ -162,7 +162,7 @@ export default function AppShell() {
               <button
                 type="button"
                 onClick={() => {
-                  supabase.auth.signOut().then(() => navigate('/login', { replace: true }))
+                  pbApi.auth.signOut().then(() => navigate('/login', { replace: true }))
                 }}
                 className="mt-3 w-full text-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
@@ -181,7 +181,7 @@ export default function AppShell() {
 
   async function signOut() {
     setSigningOut(true)
-    const { error } = await supabase.auth.signOut()
+    const { error } = await pbApi.auth.signOut()
     setSigningOut(false)
     setSignOutOpen(false)
     if (error) {

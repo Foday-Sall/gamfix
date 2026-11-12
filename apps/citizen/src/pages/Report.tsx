@@ -56,7 +56,7 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { DiscardReportDialog, SubmitReportDialog } from '@/components/ConfirmDialogs'
 import { rememberTracking } from '@/pages/MyReports'
-import { handleAuthExpired, isAuthError, isNetworkError, supabase } from '@/lib/supabase'
+import { handleAuthExpired, isAuthError, isNetworkError, pbApi } from '@/lib/pocketbase'
 import {
   COUNCIL_AREAS,
   councilForLatLng,
@@ -230,7 +230,7 @@ export default function Report() {
   }, [])
 
   async function fetchCategories(): Promise<CategoryInfo[]> {
-    const { data, error } = await supabase
+    const { data, error } = await pbApi
       .from('categories')
       .select('id, slug, name, default_institution_id, is_sensitive, is_emergency, deadline_hours')
       .order('name')
@@ -345,7 +345,7 @@ export default function Report() {
     setSubmitting(true)
     try {
       if (photoFile) {
-        const { data: accessData, error: accessError } = await supabase.rpc('fn_dashboard_access')
+        const { data: accessData, error: accessError } = await pbApi.rpc('fn_dashboard_access')
         if (accessError) {
           toast.error('We could not verify your citizen account. Please try again.')
           return
@@ -392,7 +392,7 @@ export default function Report() {
       }
       if (location.landmark.trim()) params.p_ward = location.landmark.trim()
 
-      const { data, error } = await supabase.rpc('submit_complaint', params)
+      const { data, error } = await pbApi.rpc('submit_complaint', params)
       if (error || !data) {
         console.error('submit_complaint failed:', error?.message)
         if (isAuthError(error)) {
@@ -441,7 +441,7 @@ export default function Report() {
     const normalizeCode = (value: string | null | undefined) =>
       value?.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 48) || 'upload_failed'
     try {
-      const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
+      const { data, error } = await pbApi.functions.invoke<{ ok?: boolean; error?: string }>(
         'citizen-photo-upload',
         { body },
       )
@@ -474,7 +474,7 @@ export default function Report() {
     if (!result || !photoFile || retryingPhotoUpload) return
     let accessData: unknown
     try {
-      const accessResult = await supabase.rpc('fn_dashboard_access')
+      const accessResult = await pbApi.rpc('fn_dashboard_access')
       if (accessResult.error) throw accessResult.error
       accessData = accessResult.data
     } catch {

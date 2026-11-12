@@ -93,6 +93,9 @@ The compiled production citizen app + dashboard are preserved in
 
 ## History
 
-The original UI was taken 1:1 from the public Supabase-era repo
-(`Foday-Sall/gamfix`) and fully ported to PocketBase. That earlier repo
-remains on GitHub for reference; this repo is the source of truth.
+The original UI was taken 1:1 from the earlier public repo
+(`Foday-Sall/gamfix`), which was written against Supabase. Everything now
+runs on PocketBase — backend, database, auth and file storage are all
+PocketBase (see the stack table above); no Supabase service or SDK is used
+anywhere in this repo. That earlier repo remains on GitHub for reference;
+this repo is the source of truth.

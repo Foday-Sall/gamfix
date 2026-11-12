@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { supabase } from '@/lib/supabase'
+import { pbApi } from '@/lib/pocketbase'
 import { friendlyAuthError } from '@/lib/authErrors'
 
 const OTP_LENGTH = 6
@@ -40,7 +40,7 @@ export default function VerifyEmail() {
       setEmail(stateEmail)
       return
     }
-    supabase.auth.getSession().then(({ data }) => {
+    pbApi.auth.getSession().then(({ data }) => {
       const mail = data.session?.user?.email
       if (mail) setEmail(mail)
     })
@@ -56,7 +56,7 @@ export default function VerifyEmail() {
   async function resendCode() {
     setError(null)
     setBusy(true)
-    const { error: err } = await supabase.auth.resend({
+    const { error: err } = await pbApi.auth.resend({
       type: 'signup',
       email: email.trim(),
     })
@@ -82,7 +82,7 @@ export default function VerifyEmail() {
       return
     }
     setBusy(true)
-    const { error } = await supabase.auth.verifyOtp({
+    const { error } = await pbApi.auth.verifyOtp({
       email: email.trim(),
       token: token.trim(),
       type: 'email',
@@ -162,7 +162,7 @@ export default function VerifyEmail() {
             <button
               type="button"
               onClick={async () => {
-                await supabase.auth.signOut()
+                await pbApi.auth.signOut()
                 navigate('/login', { replace: true })
               }}
               className="font-medium text-primary underline underline-offset-2"

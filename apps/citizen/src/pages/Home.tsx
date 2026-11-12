@@ -17,7 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { supabase } from '@/lib/supabase'
+import { pbApi } from '@/lib/pocketbase'
 import { statusMeta } from '@/lib/gamciv'
 
 type RecentRow = {
@@ -47,7 +47,7 @@ export default function Home() {
     if (!session) return
     let alive = true
     ;(async () => {
-      const { data } = await supabase
+      const { data } = await pbApi
         .from('complaints')
         .select('tracking_no, title, status, created_at')
         .order('created_at', { ascending: false })

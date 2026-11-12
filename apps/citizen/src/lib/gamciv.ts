@@ -1,10 +1,10 @@
 /**
  * Shared domain helpers for the citizen app: institutions, categories,
  * council areas and status metadata. All live data comes from the real
- * backend (api.pocketsoftware.dev) through the shared supabase client.
+ * backend (api.pocketsoftware.dev) through the shared pbApi client.
  */
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
+import { pbApi } from '@/lib/pocketbase'
 
 /** The five branded services plus the central desk that handles sensitive reports. */
 export type InstitutionCode = 'KMC' | 'NAWEC' | 'NRA' | 'NEA' | 'POLICE' | 'CENTRAL'
@@ -64,7 +64,7 @@ export const INSTITUTION_ORDER: InstitutionCode[] = ['KMC', 'NAWEC', 'NRA', 'NEA
  * dropped by `public_visible=eq.true`.
  */
 export async function fetchInstitutions(): Promise<InstitutionInfo[]> {
-  const { data, error } = await supabase
+  const { data, error } = await pbApi
     .from('institutions')
     .select('id, code, name, type, logo_url')
     .in('code', [...INSTITUTION_ORDER, 'CENTRAL'])

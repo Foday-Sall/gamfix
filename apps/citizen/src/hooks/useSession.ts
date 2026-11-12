@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase, type Session } from '@/lib/supabase'
+import { pbApi, type Session } from '@/lib/pocketbase'
 
 /**
  * Single source of truth for auth state. Subscribes to onAuthStateChange so
@@ -10,12 +10,12 @@ export function useSession() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth
+    pbApi.auth
       .getSession()
       .then(({ data }) => setSession(data.session))
       .finally(() => setLoading(false))
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = pbApi.auth.onAuthStateChange((_event, session) => {
       setSession(session)
     })
     return () => sub.subscription.unsubscribe()
@@ -44,7 +44,7 @@ export function useDisplayName(session: Session | null) {
       'Your account'
     setName(fallback)
 
-    supabase
+    pbApi
       .from('profiles')
       .select('full_name')
       .eq('user_id', user.id)

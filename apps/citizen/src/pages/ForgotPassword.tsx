@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { friendlyAuthError } from '@/lib/authErrors'
-import { supabase } from '@/lib/supabase'
+import { pbApi } from '@/lib/pocketbase'
 
 export const PASSWORD_RECOVERY_EMAIL_KEY = 'gamciv:password-recovery-email'
 export const PASSWORD_RECOVERY_STEP_KEY = 'gamciv:password-recovery-step'
@@ -33,7 +33,7 @@ export default function ForgotPassword() {
 
     setBusy(true)
     try {
-      const { error: requestError } = await supabase.auth.resetPasswordForEmail(address, {
+      const { error: requestError } = await pbApi.auth.resetPasswordForEmail(address, {
         redirectTo: `${window.location.origin}/app/`,
       })
       if (requestError) {

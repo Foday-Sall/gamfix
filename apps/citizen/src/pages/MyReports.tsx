@@ -10,7 +10,7 @@ import { FileText, ChevronRight, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { supabase } from '@/lib/supabase'
+import { pbApi } from '@/lib/pocketbase'
 import { statusMeta } from '@/lib/gamciv'
 import { useSession } from '@/hooks/useSession'
 
@@ -58,7 +58,7 @@ export default function MyReports() {
     if (!session) return
     let alive = true
     ;(async () => {
-      const { data, error } = await supabase
+      const { data, error } = await pbApi
         .from('complaints')
         .select('tracking_no, title, status, created_at')
         .order('created_at', { ascending: false })

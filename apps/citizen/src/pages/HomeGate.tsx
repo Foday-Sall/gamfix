@@ -1,6 +1,6 @@
 import { useSession } from '@/hooks/useSession'
 import InstituteDashboard from '@/pages/InstituteDashboard'
-import { getProfile } from '@/lib/supabase'
+import { getProfile } from '@/lib/pocketbase'
 import { useEffect, useState } from 'react'
 import Home from '@/pages/Home'
 

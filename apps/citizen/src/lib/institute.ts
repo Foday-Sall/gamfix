@@ -1,7 +1,7 @@
 // Data + actions for institutional users (staff) inside the citizen app.
 // The officers table (backend/db/0004_officer.sql) ties an auth user to an
 // institution; its complaints feed is the institute dashboard's source.
-import { supabase } from '@/lib/supabase'
+import { pbApi } from '@/lib/pocketbase'
 import { toast } from 'sonner'
 
 export type InstituteUser = {
@@ -27,7 +27,7 @@ export type InstituteDashboardStats = {
 
 /** Look up the signed-in user's officers row; null when they are not staff. */
 export async function getInstituteUser(userId: string): Promise<InstituteUser | null> {
-  const { data, error } = await supabase
+  const { data, error } = await pbApi
     .from('officers')
     .select('id, institution_id, institutions(name)')
     .eq('user_id', userId)
@@ -45,7 +45,7 @@ export async function getInstituteUser(userId: string): Promise<InstituteUser | 
 
 /** Load aggregate metrics for the signed-in officer's institution only. */
 export async function getInstituteDashboardStats(): Promise<InstituteDashboardStats | null> {
-  const { data, error } = await supabase.rpc('fn_institution_dashboard_stats')
+  const { data, error } = await pbApi.rpc('fn_institution_dashboard_stats')
   if (error || !data || (data as { ok?: boolean }).ok === false) {
     if (error) console.error('institution dashboard stats failed:', error.message)
     return null
@@ -70,7 +70,7 @@ async function callOfficerRpc(
   args: Record<string, unknown>,
   complaintId: string,
 ): Promise<boolean> {
-  const { error } = await supabase.rpc(rpc, { p_complaint_id: complaintId, ...args })
+  const { error } = await pbApi.rpc(rpc, { p_complaint_id: complaintId, ...args })
   if (error) {
     toast.error(`Could not ${rpc.replace('fn_officer_', '').replaceAll('_', ' ')}: ${error.message}`)
     return false

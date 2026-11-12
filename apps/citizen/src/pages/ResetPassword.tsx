@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { friendlyAuthError } from '@/lib/authErrors'
-import { supabase } from '@/lib/supabase'
+import { pbApi } from '@/lib/pocketbase'
 import { PASSWORD_RECOVERY_EMAIL_KEY, PASSWORD_RECOVERY_STEP_KEY } from './ForgotPassword'
 
 const GENERIC_NOTICE =
@@ -63,7 +63,7 @@ export default function ResetPassword() {
   useEffect(() => {
     if (step !== 'password') return
     let cancelled = false
-    supabase.auth.getSession().then(({ data }) => {
+    pbApi.auth.getSession().then(({ data }) => {
       if (!cancelled && !data.session) {
         setStep('code')
         try {
@@ -85,7 +85,7 @@ export default function ResetPassword() {
     setError(null)
     setBusy(true)
     try {
-      const { error: requestError } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error: requestError } = await pbApi.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/app/`,
       })
       if (requestError) {
@@ -111,7 +111,7 @@ export default function ResetPassword() {
 
     setBusy(true)
     try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
+      const { error: verifyError } = await pbApi.auth.verifyOtp({
         email,
         token: code.trim(),
         type: 'recovery',
@@ -147,13 +147,13 @@ export default function ResetPassword() {
 
     setBusy(true)
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password })
+      const { error: updateError } = await pbApi.auth.updateUser({ password })
       if (updateError) {
         setError(friendlyAuthError(updateError))
         return
       }
 
-      await supabase.auth.signOut({ scope: 'local' })
+      await pbApi.auth.signOut({ scope: 'local' })
       try {
         sessionStorage.removeItem(PASSWORD_RECOVERY_EMAIL_KEY)
         sessionStorage.removeItem(PASSWORD_RECOVERY_STEP_KEY)

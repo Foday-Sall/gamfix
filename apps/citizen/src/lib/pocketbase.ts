@@ -28,10 +28,10 @@ export type Profile = {
   email_verified: boolean
 }
 
-type SupabaseResult<T> = { data: T; error: ErrorLike | null }
+type ApiResult<T> = { data: T; error: ErrorLike | null }
 type ErrorLike = { message: string; name?: string; code?: string; status?: number; context?: Response }
 
-const baseURL = import.meta.env.VITE_POCKETBASE_URL || 'https://15.224.0.22.sslip.io'
+const baseURL = import.meta.env.VITE_POCKETBASE_URL || 'https://backend.pocketsoftware.dev'
 export const pb = new PocketBase(baseURL)
 pb.autoCancellation(false)
 
@@ -43,13 +43,13 @@ function normalizeError(error: unknown): ErrorLike {
   return { message: String(error) }
 }
 
-function result<T>(data: T | null, error: unknown = null): SupabaseResult<T> {
+function result<T>(data: T | null, error: unknown = null): ApiResult<T> {
   return { data: data as T, error: error ? normalizeError(error) : null }
 }
 
 /**
- * Present a PocketBase auth record with the field names the original UI
- * expects from a Supabase session. `email_confirmed_at` is derived from the
+ * Present a PocketBase auth record with the legacy field names the
+ * original UI expects (pre-PocketBase schema compatibility). `email_confirmed_at` is derived from the
  * PocketBase `verified` flag — without this every login looked
  * "unconfirmed" and bounced to /verify/email forever (the stuck-screen bug).
  */
@@ -136,12 +136,12 @@ class QueryBuilder<T extends RecordModel = RecordModel> {
   order(field: string, options?: { ascending?: boolean }) { this.sort = `${options?.ascending === false ? '-' : '+'}${aliasField(this.originalCollection, field)}`; return this }
   limit(value: number) { this.pageSize = value; return this }
   range(from: number, to: number) { this.pageNumber = Math.floor(from / Math.max(1, to - from + 1)) + 1; this.pageSize = to - from + 1; return this }
-  async maybeSingle(): Promise<SupabaseResult<T | null>> {
+  async maybeSingle(): Promise<ApiResult<T | null>> {
     try { const items = await this.promiseFactory(); return result((items[0] ? shapeRecord(this.originalCollection, items[0]) : null) as T | null) }
     catch (error) { return result<T | null>(null, error) }
   }
   update(values: Record<string, unknown>) { this.pendingUpdate = values; return this }
-  async then<TResult1 = SupabaseResult<T[]>, TResult2 = never>(onfulfilled?: ((value: SupabaseResult<T[]>) => TResult1 | PromiseLike<TResult1>) | null, onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null) {
+  async then<TResult1 = ApiResult<T[]>, TResult2 = never>(onfulfilled?: ((value: ApiResult<T[]>) => TResult1 | PromiseLike<TResult1>) | null, onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null) {
     try {
       const items = await this.promiseFactory()
       if (this.pendingUpdate) {
@@ -159,7 +159,7 @@ class QueryBuilder<T extends RecordModel = RecordModel> {
 }
 
 const auth = {
-  getSession: async (): Promise<SupabaseResult<{ session: Session | null }>> => {
+  getSession: async (): Promise<ApiResult<{ session: Session | null }>> => {
     if (!pb.authStore.isValid || !pb.authStore.record) return result({ session: null })
     return result({ session: sessionFromRecord(pb.authStore.record as User) })
   },
@@ -247,10 +247,10 @@ const auth = {
 /** Last avatar URL produced by storage.upload (Profile reads it right after). */
 let lastAvatarUrl = ''
 
-export const supabase = {
+export const pbApi = {
   auth,
   from: <T extends RecordModel = RecordModel>(collection: string) => new QueryBuilder<T>(collection),
-  rpc: async <T = unknown>(name: string, params: Record<string, unknown> = {}): Promise<SupabaseResult<T>> => {
+  rpc: async <T = unknown>(name: string, params: Record<string, unknown> = {}): Promise<ApiResult<T>> => {
     const paths: Record<string, string> = { submit_complaint: '/api/gamfix/complaints', track_complaint: '/api/gamfix/track', fn_can_confirm_report: '/api/gamfix/can-confirm', confirm_complaint: '/api/gamfix/confirm', reopen_complaint: '/api/gamfix/reopen', fn_dashboard_access: '/api/gamfix/access' }
     try {
       const route = paths[name] ?? `/api/gamfix/${name}`

@@ -1,0 +1,11 @@
+[Unit]
+Description=Retry cert issuance every 10 min until both pocketsoftware.dev certs exist
+
+[Timer]
+OnBootSec=2min
+# 30 min: stay well under the LE failed-validation rate limit while the
+# pocketsoftware.dev DNS records still point at Cloudflare
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target

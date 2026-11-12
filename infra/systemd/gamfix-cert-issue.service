@@ -1,0 +1,7 @@
+[Unit]
+Description=Retry Let's Encrypt issuance for pocketsoftware.dev hosts
+After=network-online.target nginx.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gamfix-src/cert-issue.sh

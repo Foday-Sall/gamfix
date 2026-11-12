@@ -31,7 +31,12 @@ export type Profile = {
 type ApiResult<T> = { data: T; error: ErrorLike | null }
 type ErrorLike = { message: string; name?: string; code?: string; status?: number; context?: Response }
 
-const baseURL = import.meta.env.VITE_POCKETBASE_URL || 'https://backend.pocketsoftware.dev'
+// Same-origin by default: the app is served next to PocketBase by the host
+// nginx (VPS docker stack), so '/' works on every domain and avoids CORS.
+// The PB JS SDK needs a leading slash — with '' it prepends the current
+// page path (/app/api/...). Override with VITE_POCKETBASE_URL only for
+// split deployments.
+const baseURL = import.meta.env.VITE_POCKETBASE_URL || '/'
 export const pb = new PocketBase(baseURL)
 pb.autoCancellation(false)
 

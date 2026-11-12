@@ -1,10 +1,62 @@
 # Deploying GamFix
 
-Three ways to deploy, pick one:
+Four ways to deploy, pick one:
 
+0. **Current production layout (VPS: nginx + web Docker container + bare-metal PB)** — live since 2026-11-12
 1. **All-in-one Docker (easiest, one command)** — new stacks
-2. **Existing VPS, bare metal** — current production layout
-3. **Frontend-only to Cloudflare Pages or Vercel** — static hosting
+2. **Existing VPS, bare metal** — previous production layout
+3. **Frontend-only to Cloudflare Pages or Vercel** — legacy, no longer used for production
+
+---
+
+## 0. Current production layout (2026-11-12)
+
+Everything runs on the VPS (15.224.0.22), **no Cloudflare in the request
+path** — Cloudflare DNS is authoritative but both records are DNS-only
+(grey cloud):
+
+| URL | Serves |
+| --- | --- |
+| `https://gamfix.pocketsoftware.dev/` | landing |
+| `https://gamfix.pocketsoftware.dev/app/` | citizen app |
+| `https://gamfix.pocketsoftware.dev/dash/` | staff dashboard |
+| `https://gamfix.pocketsoftware.dev/api/…` | PocketBase (same origin) |
+| `https://15.224.0.22.sslip.io/…` | identical stack, direct-to-VPS fallback |
+
+- **Frontend** runs in the `gamfix-web` Docker container
+  (image from `infra/docker/web.Dockerfile`, port `127.0.0.1:8088`):
+  landing + citizen app + dashboard snapshot, one nginx inside.
+  Rebuild after changing sources:
+  `sudo docker build -f /opt/gamfix-src/infra/docker/web.Dockerfile -t gamfix-web /opt/gamfix-src && sudo docker rm -f gamfix-web && sudo docker run -d --name gamfix-web --restart unless-stopped -p 127.0.0.1:8088:80 gamfix-web`
+- **PocketBase** stays bare metal via systemd (`/opt/pocketbase`, port
+  `127.0.0.1:8090`) so `pb_data` is untouched.
+- **nginx** config: `/etc/nginx/sites-available/pocketbase` with shared
+  snippets from `/etc/nginx/snippets/gamfix-*.conf` (also kept in
+  `infra/nginx/`). Vhosts: `gamfix.pocketsoftware.dev` (UI + API),
+  `backend.pocketsoftware.dev` (API alias),
+  `15.224.0.22.sslip.io` (fallback).
+- **Both frontends are built same-origin** (`VITE_POCKETBASE_URL=/`, the
+  dashboard dist bundles patched to base `/`): whatever domain serves the
+  app also serves the API, so there is no CORS and the Google OAuth
+  redirect URI always matches the current origin.
+- **Certificates**: `certbot` webroot (`/var/www/certbot`).
+  `/opt/gamfix-src/cert-issue.sh` + `gamfix-cert-issue.timer` retry
+  issuance every 30 min until a domain's DNS points here, then disable
+  themselves; renewal is certbot's own timer.
+- **Realtime (SSE) gotcha — do not "fix"**: PB pins every realtime client
+  to the IP that opened the SSE stream and rejects subscribes from a
+  different IP (`Invalid realtime client.`). Mobile/CGNAT clients rotate
+  IP between the EventSource GET and the subscribe POST, so
+  `location = /api/realtime` must NOT forward `X-Real-IP` /
+  `X-Forwarded-For` — PB then sees the constant loopback IP on both legs.
+- **DNS**: `gamfix.pocketsoftware.dev` = A `15.224.0.22`, DNS-only.
+  `backend.pocketsoftware.dev` is still held by a read-only record
+  created by the retired Cloudflare Worker custom domain — detach it
+  (Workers & Pages → gamfix-api → Settings → Domains & Routes → remove),
+  then set the same A record; the cert timer picks the rest up.
+- The Cloudflare Pages project and the `gamfix-api` Worker are retired:
+  no traffic reaches them once DNS is grey-cloud (gamfix) and the worker
+  domain is detached (backend).
 
 ---
 

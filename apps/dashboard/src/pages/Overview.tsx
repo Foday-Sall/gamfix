@@ -1,34 +1,35 @@
 // Overview: admin sees platform-wide stats (/admin getOverviewStats); officers
-// see their institution's dashboard (/staff/stats). Includes trend chart and
-// category/status breakdowns.
+// see their institution's dashboard (/staff/stats) built on the Astryx
+// dashboard template design — live badge, metric tiles, and a trend chart.
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   AlarmClock,
-  Building2,
+  CalendarDays,
   CheckCircle2,
-  Clock3,
+  FolderOpen,
   Flame,
   Inbox,
   Layers,
+  RefreshCw,
   Timer,
-  TrendingUp,
 } from 'lucide-react'
 import { adminRpc, rpc, type AdminStats, type OfficerStats, type Session } from '../lib/pb'
-import { statusMeta } from '../lib/meta'
 import {
-  BarList,
-  ChartLegend,
-  LineChart,
+  LiveBadge,
   LoadError,
   Loading,
   PageHead,
   Panel,
   StatCard,
+  TrendLineChart,
+  StatTile,
 } from '../components/ui'
 
-const GREEN = '#2e7d4f'
-const AMBER = '#d97706'
+const BLUE = 'var(--color-data-categorical-blue, #0171E3)'
+const ORANGE = 'var(--color-data-categorical-orange, #EB6E00)'
+const GREEN = 'var(--color-data-categorical-green, #0B991F)'
+const RED = '#dc2626'
 
 export function Overview({ session }: { session: Session }) {
   if (session?.role === 'officer') return <OfficerOverview />
@@ -64,81 +65,103 @@ function AdminOverview() {
         />
       </div>
       <Panel title="Complaints received per day">
-        <LineChart
-          labels={stats.daily.map((d) => d.date)}
-          series={[{ name: 'Received', color: GREEN, values: stats.daily.map((d) => d.count) }]}
+        <TrendLineChart
+          height={220}
+          labels={stats.daily.map((d) => shortDate(d.date))}
+          series={[{ name: 'Received', color: BLUE, values: stats.daily.map((d) => d.count) }]}
         />
-        <ChartLegend entries={[{ name: 'Received', color: GREEN }]} />
       </Panel>
-      <div className="two-col">
-        <Panel title="By category">
-          <BarList items={stats.per_category.map((c) => ({ name: c.category, count: c.count }))} />
-        </Panel>
-        <Panel title="Daily volume, last 14 days">
-          <BarList items={stats.daily.map((d) => ({ name: d.date.slice(5), count: d.count }))} max={14} />
-        </Panel>
-      </div>
     </div>
   )
+}
+
+function shortDate(iso: string): string {
+  const d = new Date(iso + (iso.length === 10 ? 'T00:00:00' : ''))
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 function OfficerOverview() {
   const [stats, setStats] = useState<OfficerStats | null>(null)
   const [error, setError] = useState(false)
+  const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setBusy(true)
     rpc<OfficerStats>('/api/gamfix/staff/stats')
       .then((s) => (s.ok ? setStats(s) : setError(true)))
       .catch(() => setError(true))
+      .finally(() => setBusy(false))
   }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   if (error) return <LoadError title="Could not load statistics" />
   if (!stats) return <Loading label="Loading overview…" />
 
   return (
     <div className="page">
-      <PageHead title="Overview" subtitle={`Institution dashboard — ${stats.institution.name}`} />
-      <div className="stat-grid">
-        <StatCard label="Total complaints" value={stats.total} icon={<Layers size={18} />} />
-        <StatCard label="Received today" value={stats.today} icon={<TrendingUp size={18} />} />
-        <StatCard label="Open" value={stats.open} icon={<Inbox size={18} />} />
-        <StatCard label="Resolved (7 days)" value={stats.resolved_week} icon={<CheckCircle2 size={18} />} />
-        <StatCard label="Overdue (SLA)" value={stats.overdue} icon={<AlarmClock size={18} />} />
-        <StatCard label="Avg resolution" value={stats.avg_resolution_hours + ' h'} icon={<Clock3 size={18} />} />
+      <div className="page-head-block">
+        <div className="page-head-text">
+          <LiveBadge />
+          <h2 className="page-title">{stats.institution.name} operations overview</h2>
+          <p className="page-subtitle">Review workload, new reports, response progress, and overdue cases.</p>
+        </div>
+        <button className="refresh-btn" onClick={load} disabled={busy}>
+          <RefreshCw size={15} className={busy ? 'spin' : undefined} />
+          Refresh data
+        </button>
       </div>
-      <Panel title="Received vs resolved, last 14 days">
-        <LineChart
-          labels={stats.daily.map((d) => d.date)}
-          series={[
-            { name: 'Received', color: GREEN, values: stats.daily.map((d) => d.received) },
-            { name: 'Resolved', color: AMBER, values: stats.daily.map((d) => d.resolved) },
-          ]}
+
+      <div className="tile-grid">
+        <StatTile
+          label="Total complaints"
+          value={stats.total}
+          description="All reports assigned to your institution"
+          color={'#0d9488'}
+          icon={<Layers size={17} />}
         />
-        <ChartLegend
-          entries={[
-            { name: 'Received', color: GREEN },
-            { name: 'Resolved', color: AMBER },
+        <StatTile
+          label="New today"
+          value={stats.today}
+          description="Received since midnight"
+          color={BLUE}
+          icon={<CalendarDays size={17} />}
+        />
+        <StatTile
+          label="Open cases"
+          value={stats.open}
+          description="Awaiting resolution or next action"
+          color={ORANGE}
+          icon={<FolderOpen size={17} />}
+        />
+        <StatTile
+          label="Resolved this week"
+          value={stats.resolved_week}
+          description="Closed in the last 7 days"
+          color={GREEN}
+          icon={<CheckCircle2 size={17} />}
+        />
+        <StatTile
+          label="Overdue cases"
+          value={stats.overdue}
+          description="Past the response deadline"
+          color={RED}
+          icon={<AlarmClock size={17} />}
+        />
+      </div>
+
+      <Panel title="Received vs resolved, last 14 days">
+        <TrendLineChart
+          labels={stats.daily.map((d) => shortDate(d.date))}
+          series={[
+            { name: 'Received', color: BLUE, values: stats.daily.map((d) => d.received) },
+            { name: 'Resolved', color: GREEN, values: stats.daily.map((d) => d.resolved) },
           ]}
         />
       </Panel>
-      <div className="two-col">
-        <Panel title="By status">
-          <BarList items={stats.by_status.map((s) => ({ name: statusMeta(s.status).label, count: s.count }))} />
-        </Panel>
-        <Panel title="By category">
-          <BarList items={stats.by_category.map((c) => ({ name: c.category, count: c.count }))} />
-        </Panel>
-      </div>
-      <div className="two-col">
-        <Panel title="By urgency">
-          <BarList items={stats.by_urgency.map((u) => ({ name: u.urgency, count: u.count }))} />
-        </Panel>
-        <Panel title="By channel">
-          <BarList items={stats.by_channel.map((c) => ({ name: c.channel, count: c.count }))} />
-        </Panel>
-      </div>
     </div>
   )
 }
-
-export const overviewIcons = { Building2 }

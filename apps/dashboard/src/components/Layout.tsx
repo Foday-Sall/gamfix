@@ -14,6 +14,7 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  TrendingUp,
   Users,
 } from 'lucide-react'
 import { logout, type Session } from '../lib/pb'
@@ -30,6 +31,12 @@ const NAV = {
     { path: '/', label: 'Overview', icon: LayoutDashboard },
     { path: '/complaints', label: 'Complaints', icon: ClipboardList },
     { path: '/map', label: 'Map', icon: MapPin },
+  ],
+  institution: [
+    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/map', label: 'Complaint map', icon: MapPin },
+    { path: '/complaints', label: 'Complaint queue', icon: ClipboardList },
+    { path: '/trends', label: 'Service trends', icon: TrendingUp },
   ],
   administration: [
     { path: '/institutions', label: 'Institutions', icon: Building2 },
@@ -62,7 +69,11 @@ export function Layout({ session, userName, children }: { session: Session; user
 
   const sideNav = (
     <SideNav>
-      <SideNavSection title="Workspace">{NAV.workspace.map(renderItem)}</SideNavSection>
+      {isAdmin ? (
+        <SideNavSection title="Workspace">{NAV.workspace.map(renderItem)}</SideNavSection>
+      ) : (
+        <SideNavSection title="Institution portal">{NAV.institution.map(renderItem)}</SideNavSection>
+      )}
       {isAdmin ? (
         <SideNavSection title="Administration">{NAV.administration.map(renderItem)}</SideNavSection>
       ) : null}

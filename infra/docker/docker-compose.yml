@@ -2,7 +2,7 @@
 # PocketBase backend (hooks + migrations included), GOWA WhatsApp gateway.
 #
 #   1) cp .env.example .env      then edit GOWA_USER / GOWA_PASS
-#   2) docker compose up -d --build
+#   2) docker compose up -d --build          (or: docker-compose up -d --build)
 #   3) create the admin account:
 #      docker compose exec pocketbase /pb/pocketbase superuser create \
 #        you@example.com 'StrongPassword!' --dir=/pb/pb_data
@@ -10,7 +10,8 @@
 #
 # TLS: put this behind your reverse proxy / Cloudflare; the web container
 # serves plain HTTP on WEB_PORT.
-name: gamfix
+# Works with both `docker compose` (v2) and legacy `docker-compose` v1.
+version: "3.8"
 
 services:
   web:

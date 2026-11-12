@@ -13,15 +13,21 @@ Three ways to deploy, pick one:
 One command brings up everything: landing + citizen app + dashboard + API
 (PocketBase with hooks/migrations baked in) + GOWA WhatsApp gateway.
 
-Requirements: Docker + the docker compose plugin.
+Requirements: Docker with compose (`docker compose`, or legacy
+`docker-compose` v1 — both work).
 
 ```bash
-git clone https://github.com/Foday-Sall/gamfix-SL.git && cd gamfix-SL/infra/docker
+git clone https://github.com/Foday-Sall/gamfix-SL.git && cd gamfix-SL
 
+# one-time: fetch a PocketBase binary for the image
+./infra/docker/fetch-pb.sh                  # latest public release
+# (or copy your exact production binary: ./infra/docker/fetch-pb.sh /path/to/pocketbase)
+
+cd infra/docker
 cp .env.example .env
 # edit .env: set GOWA_PASS (shared basic auth), WEB_PORT, GOWA_PORT
 
-docker compose up -d --build
+docker compose up -d --build               # or: docker-compose up -d --build
 ```
 
 That's it. You now have:
@@ -92,9 +98,10 @@ reinstall them.
 ```bash
 sudo useradd -r -s /usr/sbin/nologin pocketbase
 sudo mkdir -p /opt/pocketbase && cd /opt/pocketbase
-# from https://github.com/pocketbase/pocketbase/releases (v0.41.x)
-wget https://github.com/pocketbase/pocketbase/releases/download/v0.41.1/pocketbase_0.41.1_linux_amd64.zip
-sudo unzip pocketbase_0.41.1_linux_amd64.zip && sudo chown -R pocketbase:pocketbase /opt/pocketbase
+# from https://github.com/pocketbase/pocketbase/releases (latest public release,
+# v0.40.6 at the time of writing; production currently runs a custom 0.41.1 build)
+wget https://github.com/pocketbase/pocketbase/releases/download/v0.40.6/pocketbase_0.40.6_linux_amd64.zip
+sudo unzip pocketbase_0.40.6_linux_amd64.zip && sudo chown -R pocketbase:pocketbase /opt/pocketbase
 
 # repo files
 sudo -u pocketbase mkdir -p pb_hooks pb_migrations pb_data

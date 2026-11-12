@@ -157,13 +157,13 @@ migrate((app) => {
     app.save(auditCol)
   }
 
-  // ---- admin settings (key/value, any staff read, admin write) ------------
+  // ---- admin settings (key/value, admin read + write) ---------------------
   let settingsCol = null
   try { settingsCol = app.findCollectionByNameOrId('admin_settings') } catch (_) {}
   if (!settingsCol) {
     settingsCol = new Collection({
       type: 'base', name: 'admin_settings',
-      listRule: '@request.auth.id != ""', viewRule: '@request.auth.id != ""',
+      listRule: '@request.auth.role = "admin"', viewRule: '@request.auth.role = "admin"',
       createRule: ADMIN_RULE, updateRule: ADMIN_RULE, deleteRule: ADMIN_RULE,
       fields: [
         { type: 'text', name: 'key', required: true, max: 60 },

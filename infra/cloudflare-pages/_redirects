@@ -1,4 +1,7 @@
-/dash/*           /dash/index.html 200
+# NOTE: target must NOT end in index.html — Pages normalizes those targets and
+# the rule never fires (every /dash/* subpath then falls back to the landing
+# SPA). app.html is a byte-identical copy of dash/index.html.
+/dash/*           /dash/app 200
 /login            /app/app 200
 /signup           /app/app 200
 /forgot-password  /app/app 200

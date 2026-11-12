@@ -16,21 +16,18 @@ python3 /home/z/my-project/scripts/ssh_run.py "
 set -e
 sudo mkdir -p /tmp/gamfix-infra-sync
 sudo tar xzf /tmp/gamfix-infra-sync.tar.gz -C /tmp/gamfix-infra-sync --strip-components=1
-# self-signed placeholders so vhosts can boot before certbot runs
-# (\$ escaped: the whole remote script travels inside a double-quoted string)
-for D in api.pocketsoftware.dev pocketsoftware.dev; do
-  if [ ! -s "/etc/letsencrypt/live/\$D/fullchain.pem" ]; then
-    sudo mkdir -p "/etc/letsencrypt/live/\$D"
-    sudo openssl req -x509 -nodes -newkey rsa:2048 -days 7 \
-      -keyout "/etc/letsencrypt/live/\$D/privkey.pem" \
-      -out "/etc/letsencrypt/live/\$D/fullchain.pem" -subj "/CN=\$D" 2>/dev/null
-  fi
-done
+# self-signed placeholders for any missing cert are created by cert-issue.sh
+# itself (real files only — never through certbot symlinks); run it after the
+# configs are in place, then validate and reload
 sudo cp /tmp/gamfix-infra-sync/nginx/gamfix-vps.conf /etc/nginx/sites-enabled/pocketbase
 sudo cp /tmp/gamfix-infra-sync/nginx/snippets/*.conf /etc/nginx/snippets/
+# retired vhosts/domains: backend (old Worker domain) + bare pocketsoftware.dev
 sudo rm -f /etc/nginx/snippets/gamfix-backend-certs.conf
+sudo rm -f /etc/nginx/snippets/gamfix-root-certs.conf
+sudo rm -rf /etc/letsencrypt/live/pocketsoftware.dev
 sudo cp /tmp/gamfix-infra-sync/systemd/cert-issue.sh /opt/gamfix-src/cert-issue.sh
 sudo chmod +x /opt/gamfix-src/cert-issue.sh
-sudo nginx -t && sudo systemctl reload nginx
-echo NGINX-SYNCED
+# placeholders/certs must exist BEFORE nginx -t (vhosts reference the paths)
+sudo /opt/gamfix-src/cert-issue.sh || true
+sudo nginx -t && sudo systemctl reload nginx && echo NGINX-SYNCED
 "

@@ -13,6 +13,7 @@ import Profile from '@/pages/Profile'
 import MyReports from '@/pages/MyReports'
 import VerifyEmail from '@/pages/VerifyEmail'
 import VerifyPhone from '@/pages/VerifyPhone'
+import Onboarding from '@/pages/Onboarding'
 
 /** Toaster position: bottom-right on desktop, top-center on mobile (spec §6). */
 function PositionedToaster() {
@@ -39,6 +40,9 @@ export default function App() {
         {/* Verification screens: OTP entry, reachable with or without a session */}
         <Route path="/verify/email" element={<VerifyEmail />} />
         <Route path="/verify/phone" element={<VerifyPhone />} />
+
+        {/* One-time name confirmation for Google/first-time accounts */}
+        <Route path="/onboarding" element={<Onboarding />} />
 
         {/* Auth pages bypass the shell */}
         <Route path="/login" element={<Auth key="signin" initialMode="signin" />} />

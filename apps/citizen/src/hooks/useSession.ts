@@ -36,13 +36,17 @@ export function useDisplayName(session: Session | null) {
       return
     }
     const meta = user.user_metadata ?? {}
+    // `name` is the field PocketBase copies from the Google profile on
+    // OAuth sign-up; full_name (the one reports use) is set in onboarding.
+    const pbName = (user as unknown as Record<string, unknown>).name
     const fallback =
       (meta.full_name as string) ||
       (meta.name as string) ||
       (meta.user_name as string) ||
+      (typeof pbName === 'string' && pbName.trim()) ||
       user.email ||
       'Your account'
-    setName(fallback)
+    setName(fallback || 'Your account')
 
     pbApi
       .from('profiles')

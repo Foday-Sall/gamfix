@@ -35,7 +35,7 @@ import {
 import { SignOutDialog } from '@/components/ConfirmDialogs'
 import PageTransition from '@/components/PageTransition'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { pbApi, getProfile, isGoogleAuthUser, STAFF_DASHBOARD_URL } from '@/lib/pocketbase'
+import { pbApi, getProfile, STAFF_DASHBOARD_URL } from '@/lib/pocketbase'
 import GamFixMark from '@/components/GamFixMark'
 import { toast } from 'sonner'
 import gamfixLogo from '@/assets/gamfix-logo.png'
@@ -67,14 +67,13 @@ export default function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const { session, loading: sessionLoading } = useSession()
-  const isGoogleUser = isGoogleAuthUser(session?.user)
   const name = useDisplayName(session)
   const [scrolled, setScrolled] = useState(false)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [gateResult, setGateResult] = useState<{
     userId: string | null
-    status: 'ready' | 'needs-phone' | 'unavailable'
+    status: 'ready' | 'needs-email' | 'needs-name' | 'needs-phone' | 'unavailable'
   }>({ userId: null, status: 'ready' })
   const [gateRetry, setGateRetry] = useState(0)
 
@@ -86,9 +85,11 @@ export default function AppShell() {
       ? gateResult.userId === session.user.id ? gateResult.status : 'checking'
       : 'ready'
 
-  // Email/password citizens must complete WhatsApp phone OTP. Google has
-  // already verified the account email and is deliberately exempt from phone OTP.
-  // Check the profile on each shell entry, including a browser refresh.
+  // Every citizen must complete the full funnel before using the app, no
+  // matter how they signed in (Google accounts used to skip phone OTP —
+  // that loophole is closed). Enforced in order so no step can be skipped:
+  // verified email → full name → verified phone. Checked on each shell
+  // entry, including a browser refresh.
   useEffect(() => {
     if (sessionLoading || !session?.user?.id) return
     let cancelled = false
@@ -99,14 +100,22 @@ export default function AppShell() {
         setGateResult({ userId, status: 'unavailable' })
         return
       }
-      if (
-        profile.role === 'citizen' &&
-        !isGoogleUser &&
-        profile.phone_verified !== true
-      ) {
-        setGateResult({ userId, status: 'needs-phone' })
-        navigate('/verify/phone', { replace: true })
-        return
+      if (profile.role === 'citizen') {
+        if (!profile.email_verified) {
+          setGateResult({ userId, status: 'needs-email' })
+          navigate('/verify/email', { replace: true })
+          return
+        }
+        if (!String(profile.full_name ?? '').trim()) {
+          setGateResult({ userId, status: 'needs-name' })
+          navigate('/onboarding', { replace: true })
+          return
+        }
+        if (profile.phone_verified !== true) {
+          setGateResult({ userId, status: 'needs-phone' })
+          navigate('/verify/phone', { replace: true })
+          return
+        }
       }
       setGateResult({ userId, status: 'ready' })
     }).catch(() => {
@@ -115,7 +124,7 @@ export default function AppShell() {
     return () => {
       cancelled = true
     }
-  }, [session?.user?.id, isGoogleUser, sessionLoading, gateRetry, navigate])
+  }, [session?.user?.id, sessionLoading, gateRetry, navigate])
 
   // A signed-in staff member or the owner is routed by the server-side
   // allowlist to the same /dash entry; transient API errors do not redirect.

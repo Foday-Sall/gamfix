@@ -6,14 +6,14 @@
  * still show `email_confirmed_at === null` are routed here after login rather
  * than seeing home content.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { pbApi } from '@/lib/pocketbase'
+import { getProfile, pbApi } from '@/lib/pocketbase'
 import { friendlyAuthError } from '@/lib/authErrors'
 
 const OTP_LENGTH = 6
@@ -27,6 +27,8 @@ export default function VerifyEmail() {
   const [error, setError] = useState<string | null>(null)
   const [resendIn, setResendIn] = useState(60)
   const [resent, setResent] = useState(false)
+  /** Guards the one-shot auto-send (StrictMode double-invokes effects in dev). */
+  const autoSendRef = useRef(false)
 
   useEffect(() => {
     document.title = 'Verify email · GamFix'
@@ -44,6 +46,62 @@ export default function VerifyEmail() {
       const mail = data.session?.user?.email
       if (mail) setEmail(mail)
     })
+  }, [location.state])
+
+  // Verified users don't belong here. Whatever sent them (a stale link, a
+  // manual URL, the old flow's assumptions) — continue the funnel instead.
+  // The fresh profile is read server-side on purpose: the cached auth record
+  // still says verified=false if the email was confirmed on another device
+  // (or by the OAuth provider), which used to trap users on this screen.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const { data } = await pbApi.auth.getSession()
+      const user = data.session?.user
+      if (cancelled || !user) return
+      // Do NOT trust the cached record's verified flag here — it stays false
+      // when the email was confirmed on another device or by the OAuth
+      // provider, which used to trap users on this screen. The fresh server
+      // profile is the source of truth.
+      const profile = await getProfile(user.id)
+      if (cancelled || !profile || !profile.email_verified) return
+      if (!String(profile.full_name ?? '').trim()) {
+        navigate('/onboarding', { replace: true })
+      } else if (profile.phone_verified !== true) {
+        navigate('/verify/phone', { replace: true })
+      } else {
+        navigate('/home', { replace: true })
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [navigate])
+
+  /**
+   * THE missing first email: the screen used to say "we sent you a code"
+   * while nothing had actually been sent at signup — the user stared at the
+   * form until they discovered the resend button 60 seconds later. When the
+   * previous screen hands off with `sendNow`, fire the send right here,
+   * once, and start the resend cooldown from it.
+   */
+  useEffect(() => {
+    const state = location.state as { email?: string; sendNow?: boolean } | null
+    if (!state?.sendNow || autoSendRef.current) return
+    autoSendRef.current = true
+    void (async () => {
+      const { error: err } = await pbApi.auth.resend({
+        type: 'signup',
+        email: state.email ?? '',
+      })
+      if (err && !/already confirmed/i.test(err.message ?? '')) {
+        setError(friendlyAuthError(err))
+        setResendIn(0) // let them retry immediately from the button
+      } else {
+        setResent(true)
+        setResendIn(60)
+      }
+    })()
   }, [location.state])
 
   // 60s resend cooldown.

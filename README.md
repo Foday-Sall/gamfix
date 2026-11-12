@@ -50,13 +50,44 @@ Full instructions: **`docs/DEPLOY.md`** — Docker one-command stack, fresh
 bare-metal VPS (nginx + systemd + GOWA), redeploying the existing VPS, and
 frontend-only hosting on Cloudflare Pages or Vercel.
 
+## Auth funnel (how sign-in works)
+
+Every citizen completes the same funnel, enforced both client- and
+server-side, in this order — no step can be skipped, whichever way you sign in:
+
+```
+sign up / sign in (password form or Google popup)
+  → 1. verify email        (6-digit code; the FIRST code is sent by the
+                            verify screen itself on mount — "sendNow")
+  → 2. confirm your name   (/onboarding; Google accounts prefill from
+                            the Google profile, full_name stays empty
+                            server-side until the user confirms)
+  → 3. verify phone        (6-digit code on WhatsApp via GOWA; server
+                            route refuses users with unverified email)
+  → 4. /home
+```
+
+- Google accounts are no longer exempt from phone verification, and an
+  unverified email can never reach phone OTP (the `/api/gamfix/phone-otp/*`
+  hooks return 403, and the AppShell gate + page guards route to the right
+  step).
+- After the Google popup resolves, the app routes immediately — no manual
+  browser refresh needed (`routeAfterAuth` in `apps/citizen/src/pages/Auth.tsx`).
+- OTP codes live in the PocketBase process store: they expire with a PB
+  restart, and each send is rate-limited to one per 60 s per user.
+
 ## Live deployment reference (2026-11-12)
 
 - VPS `15.224.0.22` (AWS Lightsail, eu-west-3): nginx on 80/443,
-  PocketBase at `127.0.0.1:8090`, GOWA at `127.0.0.1:3000` (Docker)
-- Citizen app: https://gamfix.pocketsoftware.dev (Cloudflare Pages) and
-  https://15.224.0.22.sslip.io/app/
-- Dashboard: https://15.224.0.22.sslip.io/dash/
+  PocketBase (systemd) at `127.0.0.1:8090`, GOWA at `127.0.0.1:3000` (Docker),
+  web container `gamfix-web` at `127.0.0.1:8088` (built from this repo's
+  `infra/docker/web.Dockerfile`).
+- Citizen app + landing: https://gamfix.pocketsoftware.dev (nginx vhost in
+  front of the web container; same origin serves `/api` → PocketBase).
+- API alias: https://api.pocketsoftware.dev · Dashboard: https://gamfix.pocketsoftware.dev/dash/
+- Mail: SMTP via Resend (`noreply@pocketsoftware.dev`); DNS carries Resend
+  DKIM + SPF (`include:amazonses.com`) + DMARC — without those, Gmail
+  greylists the OTP mails and they arrive late.
 
 ## Secrets policy
 

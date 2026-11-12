@@ -32,6 +32,12 @@ routerAdd("POST", "/api/gamfix/phone-otp/send", (e) => {
 
     const user = $app.findRecordById("users", e.auth.id)
     if (user.getBool("phone_verified")) return e.json(409, { error: "Phone is already verified." })
+    // Server-side funnel enforcement: phone verification may only START
+    // after the email is verified (or was verified by the OAuth provider).
+    // The UI enforces this too; this stops the URL-typing loophole.
+    if (!user.getBool("verified")) {
+      return e.json(403, { error: "Verify your email first, then verify your phone." })
+    }
     const owners = $app.findRecordsByFilter(
       "users",
       'phone = "' + phone + '" && id != "' + e.auth.id + '"',
@@ -151,6 +157,16 @@ routerAdd("POST", "/api/gamfix/phone-otp/verify", (e) => {
 
     const store = $app.store()
     const storeKey = "gamfix_phone_otp:" + e.auth.id
+
+    // Defense in depth: a code can only exist for an email-verified user
+    // (the send route refuses them), but re-check so a code issued before
+    // the email got verified can never complete phone verification.
+    const authUser = $app.findRecordById("users", e.auth.id)
+    if (!authUser.getBool("verified")) {
+      store.remove(storeKey)
+      return e.json(403, { error: "Verify your email first, then verify your phone." })
+    }
+
     let challenge = null
     try {
       const saved = store.get(storeKey)

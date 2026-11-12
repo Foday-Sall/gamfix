@@ -42,7 +42,15 @@ pb.autoCancellation(false)
 
 function normalizeError(error: unknown): ErrorLike {
   if (error instanceof ClientResponseError) {
-    return { message: error.message, name: error.name, status: error.status, code: String(error.status), context: error.response ? new Response(JSON.stringify(error.response), { status: error.status }) : undefined }
+    // GamFix hooks return their human message in `response.error` (PB's own
+    // errors use `response.message`) — surface whichever is present, or the
+    // friendlyAuthError fallback ends up hiding what actually went wrong.
+    const body = (error.response ?? {}) as { error?: unknown; message?: unknown }
+    const message =
+      (typeof body.error === 'string' && body.error) ||
+      (typeof body.message === 'string' && body.message) ||
+      error.message
+    return { message, name: error.name, status: error.status, code: String(error.status), context: error.response ? new Response(JSON.stringify(error.response), { status: error.status }) : undefined }
   }
   if (error instanceof Error) return { message: error.message, name: error.name }
   return { message: String(error) }
@@ -185,9 +193,14 @@ const auth = {
   },
   signInWithOAuth: async ({ provider }: { provider: string; options?: { redirectTo?: string } }) => {
     try {
+      // Popup flow: the SDK opens Google in a popup window, waits for the
+      // OAuth2 relay to post the token back, stores the session in the
+      // authStore and resolves. Callers MUST route on resolution — the
+      // authStore change alone does not navigate (that was the bug that
+      // left users stuck on the login page until they refreshed).
       const authData = await pb.collection('users').authWithOAuth2({ provider })
-      // Remember the provider on the cached record so the UI can exempt
-      // Google accounts from the WhatsApp phone check (original behaviour).
+      // Remember the provider on the cached record so the UI can tell
+      // Google- accounts apart from password accounts.
       const marked = { ...authData.record, app_metadata: { provider } } as unknown as RecordModel
       pb.authStore.save(pb.authStore.token, marked)
       return result({ user: marked as User, session: sessionFromRecord(marked as User) })

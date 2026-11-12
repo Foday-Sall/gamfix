@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
-import { pbApi, routeByRole } from '@/lib/pocketbase'
+import { pbApi, routeByRole, type User } from '@/lib/pocketbase'
 import { friendlyAuthError } from '@/lib/authErrors'
 import gamfixLogo from '@/assets/gamfix-logo.png'
 import { Button } from '@/components/ui/button'
@@ -156,18 +156,56 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
     }
   }, [location.key])
 
+  /**
+   * Single post-auth router for every way a citizen can end up signed in
+   * (password submit, Google popup, or a session restored on mount).
+   *
+   * The verification funnel, enforced in order so no step can be skipped:
+   *   1. unverified email  → /verify/email
+   *   2. no full name yet  → /onboarding  (Google accounts: confirm your name)
+   *   3. phone not verified → /verify/phone
+   *   4. everything done   → /home
+   * Staff/officers were already redirected to the dashboard by routeByRole().
+   */
+  async function routeAfterAuth(session: { user: User } | null) {
+    const role = await routeByRole()
+    if (role !== 'citizen') return
+    const user = session?.user
+    if (user?.verified === false) {
+      // sendNow: the verify screen fires the FIRST code itself on mount —
+      // without this the screen claimed a code was sent while none was.
+      navigate('/verify/email', {
+        replace: true,
+        state: { email: user?.email ?? '', sendNow: true },
+      })
+      return
+    }
+    if (!String(user?.full_name ?? '').trim()) {
+      navigate('/onboarding', { replace: true })
+      return
+    }
+    if (user?.phone_verified !== true) {
+      navigate('/verify/phone', { replace: true })
+      return
+    }
+    navigate('/home', { replace: true })
+  }
+
   // Everyone signs in here. The server decides whether the session belongs
   // to a citizen, institution staff member, or the sole administrator.
   useEffect(() => {
     let cancelled = false
     pbApi.auth.getSession().then(async ({ data: { session } }) => {
       if (cancelled || !session) return
-      const role = await routeByRole()
       if (cancelled) return
-      if (role === 'citizen') {
-        navigate('/home', { replace: true })
-      } else if (!role) {
-        setError('We could not confirm that this account is enabled for GamFix. Contact the platform administrator.')
+      await routeAfterAuth(session)
+      if (!cancelled) {
+        // routeAfterAuth navigated away for citizens; still here means the
+        // account exists but its role could not be confirmed.
+        const role = session.user.role ?? 'citizen'
+        if (role !== 'citizen' && role !== 'officer' && role !== 'admin') {
+          setError('We could not confirm that this account is enabled for GamFix. Contact the platform administrator.')
+        }
       }
     }).catch(() => {
       if (!cancelled) setError('We could not verify your account. Check your connection and try again.')
@@ -210,18 +248,16 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
             description: `Welcome to GamFix, ${name.trim().split(' ')[0]}.`,
           })
           // New signups are citizens by default (the signup trigger sets the
-          // role), but respect the actual profile role just in case.
-          const routed = await routeByRole()
-          if (routed !== 'officer' && routed !== 'admin') {
-            // New accounts must confirm their email (OTP) before using the app.
-            navigate('/verify/email', { replace: true })
-          }
+          // role), but respect the actual profile role just in case. The
+          // funnel router sends every fresh account to /verify/email — and
+          // VerifyEmail sends the FIRST code itself (sendNow) when it mounts.
+          await routeAfterAuth(data.session)
         } else if (data.user) {
           // Email confirmation is required: show the OTP screen right away
           // with the address pre-filled (the user has no session yet).
           navigate('/verify/email', {
             replace: true,
-            state: { email: email.trim() },
+            state: { email: email.trim(), sendNow: true },
           })
         } else {
           switchMode('signin')
@@ -234,10 +270,11 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
         if (error) {
           if (error.message.toLowerCase().includes('email not confirmed')) {
             // Wrong password would say invalid credentials; this means the
-            // account exists and needs its email verified first.
+            // account exists and needs its email verified first. A fresh
+            // code goes out as soon as the verify screen mounts (sendNow).
             navigate('/verify/email', {
               replace: true,
-              state: { email: email.trim() },
+              state: { email: email.trim(), sendNow: true },
             })
             return
           }
@@ -255,11 +292,9 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
           return
         }
         if (routed === 'citizen') {
-          // Unconfirmed email? Send to the OTP verification screen first.
-          const unconfirmed =
-            loginData.session?.user?.email_confirmed_at == null &&
-            loginData.session?.user?.id != null
-          navigate(unconfirmed ? '/verify/email' : '/home', { replace: true })
+          // Unconfirmed email? Send to the OTP verification screen first,
+          // then phone onboarding — the funnel router owns the order.
+          await routeAfterAuth(loginData.session)
         }
       }
     } catch (err) {
@@ -275,16 +310,24 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
     setError(null)
     setBusy('google')
     try {
-      const redirectTo = `${window.location.origin}/app/`
-      const { error } = await pbApi.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo },
-      })
+      // PocketBase runs Google in a popup and RESOLVES here with the session
+      // already stored (this is not a full-page redirect — that was the old
+      // Supabase flow). Resolving is exactly when we must route the user in;
+      // leaving them on the login page is what forced a manual refresh.
+      const { error, data } = await pbApi.auth.signInWithOAuth({ provider: 'google' })
       if (error) {
         setError(friendlyAuthError(error))
         setBusy(null)
+        return
       }
-      // On success the library assigns the browser to the Google authorize URL.
+      if (!data?.session) {
+        setBusy(null)
+        return
+      }
+      // Same funnel as the password form: verify email → confirm name →
+      // verify phone → home (staff go to the dashboard inside the router).
+      await routeAfterAuth(data.session)
+      setBusy(null)
     } catch {
       setError(friendlyAuthError(new TypeError('Failed to fetch')))
       setBusy(null)

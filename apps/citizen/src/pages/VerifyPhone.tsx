@@ -2,13 +2,15 @@
  * VerifyPhone — phone number entry + 6-digit WhatsApp code.
  *
  * Two steps:
- *  1. The user enters their phone number. We call the auth-verify edge
- *     function (POST /functions/v1/auth-verify/send-phone-otp) with the
- *     session JWT; it generates a hashed code and sends it via WhatsApp.
+ *  1. The user enters their phone number. We call the server route
+ *     (POST /api/gamfix/phone-otp/send) with the session JWT; it generates a
+ *     hashed code and sends it via the GOWA WhatsApp gateway.
  *  2. The user types the 6-digit code; we call verify-phone-otp, which marks
- *     profiles.phone_verified and stores the number.
+ *     the user record phone_verified and stores the number.
  *
- * Requires a signed-in session (reached after email verification).
+ * Requires a signed-in session AND a verified email — reached after email
+ * verification (or onboarding for Google accounts). Google accounts used to
+ * be exempt here; they no longer are, so every citizen verifies a phone.
  */
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -17,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getProfile, isGoogleAuthUser, pb, pbApi } from '@/lib/pocketbase'
+import { getProfile, pb, pbApi } from '@/lib/pocketbase'
 
 const OTP_LENGTH = 6
 
@@ -97,16 +99,19 @@ export default function VerifyPhone() {
         navigate('/login', { replace: true })
         return
       }
-      if (isGoogleAuthUser(data.session.user)) {
-        navigate('/home', { replace: true })
-        return
-      }
       const profile = await getProfile(data.session.user.id)
       if (cancelled) return
-      if (profile?.phone_verified) {
-        navigate('/home', { replace: true })
-      } else if (!profile) {
+      if (!profile) {
         setError('We could not check your account. Check your connection and try again.')
+      } else if (!profile.email_verified) {
+        // Edge case the old flow ignored: phone verification must never be
+        // reachable before the email is verified (or was verified by Google).
+        navigate('/verify/email', { replace: true })
+      } else if (profile.role === 'officer' || profile.role === 'admin') {
+        // Staff skip citizen phone verification entirely.
+        window.location.replace('/dash')
+      } else if (profile.phone_verified) {
+        navigate('/home', { replace: true })
       }
       setCheckingAccount(false)
     })().catch(() => {

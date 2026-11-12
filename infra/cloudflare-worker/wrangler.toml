@@ -1,6 +1,0 @@
-name = "gamfix-api"
-main = "worker.js"
-compatibility_date = "2026-01-15"
-
-[vars]
-ORIGIN_URL = "https://15.224.0.22.sslip.io"

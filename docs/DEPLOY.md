@@ -31,11 +31,13 @@ path** — Cloudflare DNS is authoritative but both records are DNS-only
   `sudo docker build -f /opt/gamfix-src/infra/docker/web.Dockerfile -t gamfix-web /opt/gamfix-src && sudo docker rm -f gamfix-web && sudo docker run -d --name gamfix-web --restart unless-stopped -p 127.0.0.1:8088:80 gamfix-web`
 - **PocketBase** stays bare metal via systemd (`/opt/pocketbase`, port
   `127.0.0.1:8090`) so `pb_data` is untouched.
-- **nginx** config: `/etc/nginx/sites-available/pocketbase` with shared
+- **nginx** config: `/etc/nginx/sites-enabled/pocketbase` with shared
   snippets from `/etc/nginx/snippets/gamfix-*.conf` (also kept in
-  `infra/nginx/`). Vhosts: `gamfix.pocketsoftware.dev` (UI + API),
-  `backend.pocketsoftware.dev` (API alias),
-  `15.224.0.22.sslip.io` (fallback).
+  `infra/nginx/`; push changes with `infra/nginx/deploy-nginx.sh`).
+  Vhosts: `gamfix.pocketsoftware.dev` (UI + API),
+  `api.pocketsoftware.dev` (API alias for external/mobile clients),
+  `15.224.0.22.sslip.io` (fallback). `backend.pocketsoftware.dev` was
+  retired 2026-11-12 — nothing serves it anymore.
 - **Both frontends are built same-origin** (`VITE_POCKETBASE_URL=/`, the
   dashboard dist bundles patched to base `/`): whatever domain serves the
   app also serves the API, so there is no CORS and the Google OAuth
@@ -47,7 +49,7 @@ path** — Cloudflare DNS is authoritative but both records are DNS-only
   `https://gamfix.pocketsoftware.dev` (used by hooks for file/email URLs).
 - **Certificates**: `certbot` webroot (`/var/www/certbot`).
   `/opt/gamfix-src/cert-issue.sh` + `gamfix-cert-issue.timer` retry
-  issuance every 30 min until a domain's DNS points here, then disable
+  issuance every 10 min until a domain's DNS points here, then disable
   themselves; renewal is certbot's own timer.
 - **Realtime (SSE) gotcha — do not "fix"**: PB pins every realtime client
   to the IP that opened the SSE stream and rejects subscribes from a
@@ -55,14 +57,20 @@ path** — Cloudflare DNS is authoritative but both records are DNS-only
   IP between the EventSource GET and the subscribe POST, so
   `location = /api/realtime` must NOT forward `X-Real-IP` /
   `X-Forwarded-For` — PB then sees the constant loopback IP on both legs.
-- **DNS**: `gamfix.pocketsoftware.dev` = A `15.224.0.22`, DNS-only.
-  `backend.pocketsoftware.dev` is still held by a read-only record
-  created by the retired Cloudflare Worker custom domain — detach it
-  (Workers & Pages → gamfix-api → Settings → Domains & Routes → remove),
-  then set the same A record; the cert timer picks the rest up.
-- The Cloudflare Pages project and the `gamfix-api` Worker are retired:
-  no traffic reaches them once DNS is grey-cloud (gamfix) and the worker
-  domain is detached (backend).
+- **DNS** (Cloudflare is DNS-only everywhere — no proxy, no Workers):
+  `gamfix.pocketsoftware.dev` = A `15.224.0.22`, DNS-only (live).
+  `api.pocketsoftware.dev` = A `15.224.0.22`, DNS-only — **record still
+  needs to be added**; the cert timer auto-issues its cert the moment it
+  resolves here. `backend.pocketsoftware.dev` is retired: its record was
+  created by the Cloudflare Worker custom domain (gamfix-api) — remove it
+  in Workers & Pages → gamfix-api → Settings → Domains & Routes; no
+  vhost serves it anymore.
+- No Cloudflare in the data path at all (since 2026-11-12): every React
+  UI runs in the `gamfix-web` Docker container on the VPS; the old
+  Cloudflare Pages / Worker configs are deleted from the repo (they live
+  on in git history). CSP is now `connect-src 'self'` — the browser apps
+  never talk cross-origin; `api.pocketsoftware.dev` is for external
+  clients only.
 
 ---
 
@@ -220,41 +228,20 @@ sudo rsync -a --delete apps/dashboard/dist/ /opt/gamfix-pocket/dash/
 
 ---
 
-## 4. Frontend-only: Cloudflare Pages / Vercel
+## 4. Frontend-only hosting (retired for production)
 
-The frontends are static SPAs talking to the PocketBase API over HTTPS
-(CORS is open), so they can be hosted anywhere.
+Production is the `gamfix-web` Docker container on the VPS (section 0) —
+**no Cloudflare anywhere** (Pages and the gamfix-api Worker are retired,
+their configs deleted from the repo; see git history if needed). The
+notes below remain as fallback options for future static hosting.
 
-### Cloudflare Pages (current production for gamfix.pocketsoftware.dev)
+### Cloudflare Pages (retired — do not use for production)
 
-Production layout: **landing at `/`**, citizen app routes (`/login`,
-`/report`, ...) rewritten to the app bundle via `_redirects`
-(`infra/cloudflare-pages/_redirects`).
-
-**Gotchas (learned the hard way):**
-- Pages 308-redirects any path ending in `index.html` and strips `.html`
-  from all HTML files — rewrite targets must be extension-less
-  (`/app/app`, `/landing`) and the app index must be named e.g. `app.html`.
-- The citizen app for Pages builds with `--base=/` (VPS build uses the
-  default `base /app/`); the router basename follows `BASE_URL`, so one
-  source serves both.
-- wrangler v4.160+ requires an account-listing token scope; use
-  `wrangler@3` with `CLOUDFLARE_ACCOUNT_ID`, or grant Account read.
-
-```bash
-cd apps/citizen
-npm ci && npx vite build --base=/ --outDir=dist-pages --emptyOutDir
-# assemble a deploy dir:
-#   landing dist at root (index.html + assets),
-#   app dist-pages index.html renamed to app/app.html (keep its /assets refs),
-#   _redirects at the deploy root
-export CLOUDFLARE_API_TOKEN=<token with Cloudflare Pages Edit>
-export CLOUDFLARE_ACCOUNT_ID=<account id>
-npx wrangler@3 pages deploy <deploy-dir> --project-name=gamfix --branch=main --commit-dirty=true
-```
-
-The app bundle must point at the VPS API via `VITE_POCKETBASE_URL`
-(`apps/citizen/.env.production`).
+Was: landing at `/`, citizen app rewritten via `_redirects`. Gotchas if
+ever revived: Pages 308-redirects `index.html` paths (rewrite targets
+must be extension-less, app index named e.g. `app.html`); citizen built
+with `--base=/` while the router basename follows `BASE_URL`; wrangler@3
+with `CLOUDFLARE_ACCOUNT_ID` avoids the account-listing token scope.
 
 ### Vercel
 

@@ -25,7 +25,7 @@ gamfix-SL/
 │   ├── docker/         one-command Docker stack: web + PocketBase + GOWA
 │   ├── nginx/          nginx site config (bare-metal VPS layout)
 │   ├── systemd/        pocketbase.service unit (bare-metal VPS)
-│   └── cloudflare-pages/  _redirects + deploy script for Cloudflare Pages
+│   └── systemd/          cert-issue.sh + units (LE certs, PocketBase)
 ├── scripts/
 │   └── deploy_vps_ui.sh  build + deploy to the existing bare-metal VPS
 └── docs/

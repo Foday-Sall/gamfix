@@ -1,10 +1,12 @@
 #!/bin/bash
 # Issue/refresh the Let's Encrypt certs for the pocketsoftware.dev hosts and
 # point the nginx cert snippets at them. Safe to run repeatedly: it exits 0
-# quickly once both certs exist. gamfix.pocketsoftware.dev can only validate
+# quickly once both certs exist. A pocketsoftware.dev host can only validate
 # once its DNS record points directly at this VPS (grey cloud), so a systemd
 # timer (gamfix-cert-issue.timer) reruns this every 10 minutes; when both
 # certs are in place it disables itself.
+# backend.pocketsoftware.dev was retired 2026-11-12 (was a Cloudflare Workers
+# custom domain); api.pocketsoftware.dev replaced it as the API alias.
 set -u
 
 WEBROOT=/var/www/certbot
@@ -37,10 +39,10 @@ issue() { # $1 = domain
     return 1
 }
 
-# backend.pocketsoftware.dev -------------------------------------------------
-if issued backend.pocketsoftware.dev; then
+# api.pocketsoftware.dev ------------------------------------------------------
+if issued api.pocketsoftware.dev; then
     OK=$((OK+1))
-elif issue backend.pocketsoftware.dev; then
+elif issue api.pocketsoftware.dev; then
     OK=$((OK+1))
     systemctl reload nginx
 fi

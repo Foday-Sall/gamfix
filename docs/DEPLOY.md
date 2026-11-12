@@ -17,6 +17,7 @@ path** — Cloudflare DNS is authoritative but both records are DNS-only
 
 | URL | Serves |
 | --- | --- |
+| `https://pocketsoftware.dev/` | landing + app + API — **Google OAuth origin** (pending DNS A record) |
 | `https://gamfix.pocketsoftware.dev/` | landing |
 | `https://gamfix.pocketsoftware.dev/login` (+ `/signup`, `/home`, `/report`, `/track`, `/profile`, `/my-reports`, `/verify/…`, `/forgot-password`, `/reset-password`) | citizen app — root paths |
 | `https://gamfix.pocketsoftware.dev/app/…` | 301 → root equivalents (legacy) |
@@ -34,10 +35,23 @@ path** — Cloudflare DNS is authoritative but both records are DNS-only
 - **nginx** config: `/etc/nginx/sites-enabled/pocketbase` with shared
   snippets from `/etc/nginx/snippets/gamfix-*.conf` (also kept in
   `infra/nginx/`; push changes with `infra/nginx/deploy-nginx.sh`).
-  Vhosts: `gamfix.pocketsoftware.dev` (UI + API),
+  Vhosts: `pocketsoftware.dev` (UI + API — Google OAuth origin),
+  `gamfix.pocketsoftware.dev` (UI + API),
   `api.pocketsoftware.dev` (API alias for external/mobile clients),
   `15.224.0.22.sslip.io` (fallback). `backend.pocketsoftware.dev` was
   retired 2026-11-12 — nothing serves it anymore.
+- **Google OAuth2 ("Continue with Google")**: PB provider `google` lives in
+  the `users` auth collection (`oauth2.providers`, PB 0.29 style) with
+  client `635378998319-1vlgf5m586vk5pqhknm6vpdtckntfij0…` (secret stored
+  server-side only). The Google client is registered for the **bare
+  domain** — JS origin `https://pocketsoftware.dev`, redirect URI
+  `https://pocketsoftware.dev/api/oauth2-redirect` — and the PB JS SDK
+  derives the redirect from the page origin, so **the sign-in flow only
+  works when the app is opened on `https://pocketsoftware.dev`**. On
+  `gamfix.pocketsoftware.dev` the button fails with `redirect_uri_mismatch`
+  unless that origin is added to the Google client as well. Verified
+  2026-11-12: authorize request with the bare-domain redirect_uri reaches
+  the Google sign-in page (no mismatch).
 - **Both frontends are built same-origin** (`VITE_POCKETBASE_URL=/`, the
   dashboard dist bundles patched to base `/`): whatever domain serves the
   app also serves the API, so there is no CORS and the Google OAuth
@@ -59,12 +73,14 @@ path** — Cloudflare DNS is authoritative but both records are DNS-only
   `X-Forwarded-For` — PB then sees the constant loopback IP on both legs.
 - **DNS** (Cloudflare is DNS-only everywhere — no proxy, no Workers):
   `gamfix.pocketsoftware.dev` = A `15.224.0.22`, DNS-only (live).
-  `api.pocketsoftware.dev` = A `15.224.0.22`, DNS-only — **record still
-  needs to be added**; the cert timer auto-issues its cert the moment it
-  resolves here. `backend.pocketsoftware.dev` is retired: its record was
-  created by the Cloudflare Worker custom domain (gamfix-api) — remove it
-  in Workers & Pages → gamfix-api → Settings → Domains & Routes; no
-  vhost serves it anymore.
+  `pocketsoftware.dev` = A `15.224.0.22`, DNS-only — **record still needs
+  to be added** (it is the Google OAuth origin); the cert timer
+  auto-issues its cert the moment it resolves here.
+  `api.pocketsoftware.dev` = A `15.224.0.22`, DNS-only — record also still
+  pending; cert auto-issues when it lands. `backend.pocketsoftware.dev`
+  is retired: its record was created by the Cloudflare Worker custom
+  domain (gamfix-api) — remove it in Workers & Pages → gamfix-api →
+  Settings → Domains & Routes; no vhost serves it anymore.
 - No Cloudflare in the data path at all (since 2026-11-12): every React
   UI runs in the `gamfix-web` Docker container on the VPS; the old
   Cloudflare Pages / Worker configs are deleted from the repo (they live

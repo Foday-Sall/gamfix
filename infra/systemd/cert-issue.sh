@@ -39,6 +39,14 @@ issue() { # $1 = domain
     return 1
 }
 
+# pocketsoftware.dev (bare domain — Google OAuth origin) ----------------------
+if issued pocketsoftware.dev; then
+    OK=$((OK+1))
+elif issue pocketsoftware.dev; then
+    OK=$((OK+1))
+    systemctl reload nginx
+fi
+
 # api.pocketsoftware.dev ------------------------------------------------------
 if issued api.pocketsoftware.dev; then
     OK=$((OK+1))
@@ -55,10 +63,10 @@ elif issue gamfix.pocketsoftware.dev; then
     systemctl reload nginx
 fi
 
-if [ "$OK" -ge 2 ]; then
-    echo "both certs present - disabling retry timer"
+if [ "$OK" -ge 3 ]; then
+    echo "all certs present - disabling retry timer"
     systemctl disable --now gamfix-cert-issue.timer 2>/dev/null || true
     exit 0
 fi
-echo "certs ready: $OK/2 - will retry"
+echo "certs ready: $OK/3 - will retry"
 exit 0

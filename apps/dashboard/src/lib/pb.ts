@@ -2,7 +2,11 @@
 
 import PocketBase from 'pocketbase'
 
-export const pb = new PocketBase(window.location.origin)
+// API origin: on the VPS the console is same-origin with PocketBase; on static
+// hosts (Cloudflare Pages) VITE_PB_URL points at the PocketBase server.
+const env = import.meta.env as Record<string, string | undefined>
+export const PB_URL: string = env.VITE_PB_URL || window.location.origin
+export const pb = new PocketBase(PB_URL)
 // All admin RPCs share one endpoint (/api/gamfix/admin) — concurrent calls
 // would cancel each other under the SDK default auto-cancellation.
 pb.autoCancellation(false)

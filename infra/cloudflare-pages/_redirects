@@ -1,7 +1,22 @@
-# NOTE: target must NOT end in index.html — Pages normalizes those targets and
-# the rule never fires (every /dash/* subpath then falls back to the landing
-# SPA). app.html is a byte-identical copy of dash/index.html.
-/dash/*           /dash/app 200
+# Dashboard SPA routes — EXPLICIT rules only, never a /dash/* splat: rewrite
+# rules are evaluated before assets, so a splat also swallows
+# /dash/assets/*.js and breaks the app. Target must NOT end in index.html
+# (Pages normalizes those targets and the rule never fires); app.html is a
+# byte-identical copy of dash/index.html.
+/dash/login             /dash/app 200
+/dash/overview          /dash/app 200
+/dash/complaints        /dash/app 200
+/dash/institutions      /dash/app 200
+/dash/accounts          /dash/app 200
+/dash/access            /dash/app 200
+/dash/access-control    /dash/app 200
+/dash/audit-log         /dash/app 200
+/dash/settings          /dash/app 200
+/dash/whatsapp-numbers  /dash/app 200
+/dash/map               /dash/app 200
+/dash/trends            /dash/app 200
+/dash/dashboard         /dash/app 200
+/dash/queue             /dash/app 200
 /login            /app/app 200
 /signup           /app/app 200
 /forgot-password  /app/app 200

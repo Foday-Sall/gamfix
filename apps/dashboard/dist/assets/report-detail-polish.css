@@ -1,0 +1,64 @@
+/* GamFix — Report details dialog polish (shadcn-style modern look).
+   Scoped to the centered report dialog; touches styling only. */
+
+div[role="dialog"][class*="max-w-lg"] {
+  gap: 1.25rem;
+  padding: 1.75rem;
+  border-radius: 18px;
+  box-shadow:
+    0 24px 64px -16px rgba(2, 6, 23, 0.35),
+    0 2px 8px rgba(2, 6, 23, 0.08);
+}
+
+/* section cards: soft surface, calmer border, rounded */
+div[role="dialog"][class*="max-w-lg"] section.rounded-xl,
+div[role="dialog"][class*="max-w-lg"] div.rounded-xl {
+  background-color: rgba(0, 0, 0, 0.018);
+  background-color: color-mix(in srgb, var(--muted, #f5f6f7) 38%, transparent);
+  border-radius: 14px;
+}
+
+/* evidence photo: framed presentation */
+div[role="dialog"][class*="max-w-lg"] img {
+  background: var(--muted, #f2f3f5);
+  border: 1px solid var(--border, #e4e6e8);
+  border-radius: 12px;
+  padding: 6px;
+}
+
+/* "Open full-size photo" link as a modern pill button */
+div[role="dialog"][class*="max-w-lg"] a[target="_blank"] span.text-xs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background-color: rgba(22, 163, 74, 0.09);
+  background-color: color-mix(in srgb, var(--primary, #16a34a) 10%, transparent);
+  color: var(--primary, #17703a);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+div[role="dialog"][class*="max-w-lg"] a[target="_blank"] span.text-xs:hover {
+  background-color: rgba(22, 163, 74, 0.16);
+  background-color: color-mix(in srgb, var(--primary, #16a34a) 18%, transparent);
+}
+
+/* calmer headings */
+div[role="dialog"][class*="max-w-lg"] h3 {
+  letter-spacing: -0.01em;
+}
+
+/* slim scrollbar for the scrollable dialog body */
+div[role="dialog"][class*="max-w-lg"].slim-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+div[role="dialog"][class*="max-w-lg"].slim-scroll::-webkit-scrollbar-thumb {
+  background: var(--border, #cbd5d1);
+  border-radius: 8px;
+}
+div[role="dialog"][class*="max-w-lg"].slim-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

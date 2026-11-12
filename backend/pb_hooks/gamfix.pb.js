@@ -19,7 +19,7 @@ routerAdd('POST', '/api/gamfix/complaints', (e) => {
   const bodyOf = (ev) => {
     try {
       const info = ev.requestInfo()
-      if (info && info.body && typeof info.body === 'object') return info.body
+      if (info && info.body && typeof info.body === 'object' && Object.keys(info.body).length) return info.body
     } catch (_) {}
     try {
       const info = ev.requestInfo()
@@ -171,7 +171,7 @@ routerAdd('POST', '/api/gamfix/track', (e) => {
   const bodyOf = (ev) => {
     try {
       const info = ev.requestInfo()
-      if (info && info.body && typeof info.body === 'object') return info.body
+      if (info && info.body && typeof info.body === 'object' && Object.keys(info.body).length) return info.body
     } catch (_) {}
     try {
       const info = ev.requestInfo()
@@ -248,7 +248,7 @@ routerAdd('POST', '/api/gamfix/can-confirm', (e) => {
   const bodyOf = (ev) => {
     try {
       const info = ev.requestInfo()
-      if (info && info.body && typeof info.body === 'object') return info.body
+      if (info && info.body && typeof info.body === 'object' && Object.keys(info.body).length) return info.body
     } catch (_) {}
     try {
       const info = ev.requestInfo()
@@ -290,7 +290,7 @@ routerAdd('POST', '/api/gamfix/confirm', (e) => {
   const bodyOf = (ev) => {
     try {
       const info = ev.requestInfo()
-      if (info && info.body && typeof info.body === 'object') return info.body
+      if (info && info.body && typeof info.body === 'object' && Object.keys(info.body).length) return info.body
     } catch (_) {}
     try {
       const info = ev.requestInfo()
@@ -353,7 +353,7 @@ routerAdd('POST', '/api/gamfix/reopen', (e) => {
   const bodyOf = (ev) => {
     try {
       const info = ev.requestInfo()
-      if (info && info.body && typeof info.body === 'object') return info.body
+      if (info && info.body && typeof info.body === 'object' && Object.keys(info.body).length) return info.body
     } catch (_) {}
     try {
       const info = ev.requestInfo()

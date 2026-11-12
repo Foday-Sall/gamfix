@@ -124,7 +124,7 @@ export default function MyReports() {
         {/* Load-failure note */}
         {loadFailed && localOnly.length > 0 && (
           <p className="mt-4 text-sm text-muted-foreground">
-            Couldn't load your report list — showing tracking numbers from this device.
+            Couldn't load your report list - showing tracking numbers from this device.
           </p>
         )}
 

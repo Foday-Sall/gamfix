@@ -43,12 +43,10 @@ export default {
       })
     }
 
-    const out = new Headers(response.headers)
-    out.set("X-Proxied-By", "gamfix-api-worker")
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: out,
-    })
+    // Return the origin Response object itself: rebuilding it from
+    // response.body re-streams an already-decompressed body while the
+    // Content-Encoding header survives, which makes response.json() hang in
+    // browsers. Passing the original Response keeps encoding semantics intact.
+    return response
   },
 }

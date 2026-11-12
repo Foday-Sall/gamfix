@@ -1,4 +1,4 @@
-/* GamFix — Report details embedded location map.
+/* GamFix - Report details embedded location map.
  * Self-contained, no build step. Loaded (defer) on every dashboard page.
  * Replaces the external "Open location in OpenStreetMap" link inside the
  * Report details dialog with an embedded Leaflet map pinned to the report

@@ -30,7 +30,22 @@ routerAdd('POST', '/api/gamfix/access', (e) => {
         let logoUrl = String(inst.getString('logo_url') || '')
         const logoFile = inst.getString('logo')
         if (logoFile) {
-          const base = String($app.settings().meta.appUrl || '/').replace(/\/?$/, '/')
+          const fileBase = () => {
+            let host = ''
+            try { host = String(e.request.Host || e.request.host || '') } catch (_) {}
+            if (host) {
+              let proto = ''
+              try { proto = String(e.request.Header.Get('X-Forwarded-Proto') || e.request.header.Get('X-Forwarded-Proto') || '') } catch (_) {}
+              return (proto || 'https').toLowerCase() + '://' + host
+            }
+            try {
+              const m = $app.settings().meta
+              const u = String(m.appURL || m.appUrl || '')
+              if (u) return u
+            } catch (_) {}
+            return 'https://15.224.0.22.sslip.io'
+          }
+          const base = fileBase().replace(/\/?$/, '/')
           logoUrl = base + 'api/files/institutions/' + inst.id + '/' + logoFile
         }
         return e.json(200, {
@@ -249,10 +264,27 @@ routerAdd('POST', '/api/gamfix/staff/complaint', (e) => {
     try { photos = row.get('photos') || [] } catch (_) { photos = [] }
     if (!Array.isArray(photos)) photos = []
     if (photos.length) {
-      // Plain file URL; the dashboard appends its own file token
-      // (pb.files.getToken()) which PocketBase validates against the
-      // complaints view rule — officers pass via the staff scope.
-      const base = String($app.settings().meta.appUrl || '/').replace(/\/?$/, '/')
+      // Absolute file URL on the origin the request actually hit (nginx passes
+      // the public Host; static hosts like Cloudflare Pages swallow relative
+      // /api/* into their SPA fallback). The dashboard still appends its own
+      // file token (pb.files.getToken()) which PocketBase validates against
+      // the complaints view rule — officers pass via the staff scope.
+      const fileBase = () => {
+        let host = ''
+        try { host = String(e.request.Host || e.request.host || '') } catch (_) {}
+        if (host) {
+          let proto = ''
+          try { proto = String(e.request.Header.Get('X-Forwarded-Proto') || e.request.header.Get('X-Forwarded-Proto') || '') } catch (_) {}
+          return (proto || 'https').toLowerCase() + '://' + host
+        }
+        try {
+          const m = $app.settings().meta
+          const u = String(m.appURL || m.appUrl || '')
+          if (u) return u
+        } catch (_) {}
+        return 'https://15.224.0.22.sslip.io'
+      }
+      const base = fileBase().replace(/\/?$/, '/')
       photoUrl = base + 'api/files/complaints/' + row.id + '/' + String(photos[0])
     }
 

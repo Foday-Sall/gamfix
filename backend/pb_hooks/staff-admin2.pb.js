@@ -34,7 +34,22 @@ routerAdd('POST', '/api/gamfix/admin', (e) => {
     const instUrl = (inst) => {
       const logoFile = inst.getString('logo')
       if (logoFile) {
-        const base = String($app.settings().meta.appUrl || '/').replace(/\/?$/, '/')
+        const fileBase = () => {
+          let host = ''
+          try { host = String(e.request.Host || e.request.host || '') } catch (_) {}
+          if (host) {
+            let proto = ''
+            try { proto = String(e.request.Header.Get('X-Forwarded-Proto') || e.request.header.Get('X-Forwarded-Proto') || '') } catch (_) {}
+            return (proto || 'https').toLowerCase() + '://' + host
+          }
+          try {
+            const m = $app.settings().meta
+            const u = String(m.appURL || m.appUrl || '')
+            if (u) return u
+          } catch (_) {}
+          return 'https://15.224.0.22.sslip.io'
+        }
+        const base = fileBase().replace(/\/?$/, '/')
         return base + 'api/files/institutions/' + inst.id + '/' + logoFile
       }
       return String(inst.getString('logo_url') || '') || null

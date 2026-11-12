@@ -1,3 +1,4 @@
+/dash/*           /dash/index.html 200
 /login            /app/app 200
 /signup           /app/app 200
 /forgot-password  /app/app 200

@@ -1,0 +1,12 @@
+# Cloudflare Pages custom headers (audit 2026-11-12).
+# Pages assets carry no security headers by default beyond nosniff — add the
+# same set the VPS nginx serves. CSP: all bundles are external scripts, inline
+# <style> is needed by React/Leaflet, the citizen app + dashboard talk to the
+# PocketBase API on the VPS origin, and the landing loads Google Fonts.
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(self)
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://15.224.0.22.sslip.io wss://15.224.0.22.sslip.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'

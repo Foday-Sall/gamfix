@@ -57,6 +57,7 @@ import { Badge } from '@/components/ui/badge'
 import { DiscardReportDialog, SubmitReportDialog } from '@/components/ConfirmDialogs'
 import { rememberTracking } from '@/pages/MyReports'
 import { pb, gamfix, handleAuthExpired, isAuthError, isNetworkError } from '@/lib/pocketbase'
+import { compressImage } from '@/lib/imageCompress'
 import {
   COUNCIL_AREAS,
   councilForLatLng,
@@ -286,7 +287,7 @@ export default function Report() {
     window.scrollTo(0, 0)
   }
 
-  function handlePhoto(file: File | undefined) {
+  async function handlePhoto(file: File | undefined) {
     if (!file) return
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       toast.error('Please choose a JPG, PNG, or WebP image.')
@@ -296,8 +297,18 @@ export default function Report() {
       toast.error('Photo must be under 10 MB.')
       return
     }
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
+    // Compress before storing: phone photos are 3-8 MB and mobile data is
+    // expensive. compressImage never throws (falls back to the original).
+    const optimized = await compressImage(file)
+    if (optimized.size < file.size * 0.75) {
+      const savedMb = (file.size - optimized.size) / (1024 * 1024)
+      toast.success('Photo optimized for upload', {
+        description: `Saved ${savedMb.toFixed(1)} MB — same photo, faster to send.`,
+      })
+    }
+    if (photoPreview) URL.revokeObjectURL(photoPreview)
+    setPhotoFile(optimized)
+    setPhotoPreview(URL.createObjectURL(optimized))
     setPhotoUploadFailed(false)
     setPhotoUploadFailureCode(null)
   }
@@ -694,7 +705,7 @@ export default function Report() {
                   <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-border bg-card p-4 hover:bg-secondary/60">
                     <Camera className="h-5 w-5 text-primary" />
                     <span className="text-sm font-medium">Add a photo</span>
-                    <span className="text-xs text-muted-foreground">JPG, PNG, or WebP, up to 10 MB</span>
+                    <span className="text-xs text-muted-foreground">JPG, PNG, or WebP, up to 10 MB — compressed automatically</span>
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"

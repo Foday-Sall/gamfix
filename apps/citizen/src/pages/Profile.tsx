@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { pb } from '@/lib/pocketbase'
+import { pb, protectedFileUrl } from '@/lib/pocketbase'
 import { SignOutDialog } from '@/components/ConfirmDialogs'
 
 export const APP_VERSION = '1.1.0'
@@ -55,11 +55,12 @@ export default function Profile() {
     if (!uid) return
     pb.collection('users')
       .getOne(uid)
-      .then((record) => {
+      .then(async (record) => {
         if (cancelled) return
         setFullName(record.full_name ?? '')
         setSavedName(record.full_name ?? '')
-        setAvatarUrl(record.avatar ? pb.files.getURL(record, String(record.avatar)) : null)
+        // Avatar is a protected file: sign it with a short-lived file token.
+        setAvatarUrl(record.avatar ? await protectedFileUrl(record, String(record.avatar), '300x300') : null)
       })
       .catch(() => {})
     return () => {
@@ -123,7 +124,7 @@ export default function Profile() {
       // The avatar is a PocketBase file field on the users record; the SDK
       // uploads it via multipart form data and serves it through pb.files.
       const record = await pb.collection('users').update(uid, { avatar: file })
-      const url = record.avatar ? pb.files.getURL(record, String(record.avatar)) : null
+      const url = record.avatar ? await protectedFileUrl(record, String(record.avatar), '300x300') : null
       pb.authStore.save(pb.authStore.token, record)
       setAvatarUrl(url)
       setMsg({ kind: 'ok', text: 'Photo updated.' })

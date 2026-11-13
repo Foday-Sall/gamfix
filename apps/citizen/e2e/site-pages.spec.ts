@@ -1,18 +1,30 @@
 import { expect, test, type Page } from "@playwright/test";
+import { seedPocketBaseSession, type TestRecord } from "./pb-session";
+
+// The site is served by one web container on the VPS: the landing page at "/",
+// the citizen app at root paths (/login, /track), and the staff console at
+// /dash/. Tracker data comes from the app's own server routes via pb.send:
+//  POST /api/gamfix/track       { p_tracking_no }            → TrackResult
+//  POST /api/gamfix/can-confirm { p_tracking_no }            → true
+//  POST /api/gamfix/confirm     { p_tracking_no, p_phone }   → true
+//  POST /api/gamfix/reopen      { p_tracking_no, p_reason, p_phone } → true
+// Sessions are the real PocketBase authStore: {token, record} under the
+// localStorage key "pocketbase_auth", validated on mount via
+// POST /api/collections/users/auth-refresh.
 
 const productionBaseURL = process.env.BASE_URL;
 const landingURL = productionBaseURL
   ? new URL("/", productionBaseURL).toString()
   : "http://127.0.0.1:4174/";
 const sharedLoginURL = productionBaseURL
-  ? new URL("/app/login", productionBaseURL).toString()
-  : "http://127.0.0.1:4173/app/login";
+  ? new URL("/login", productionBaseURL).toString()
+  : "http://127.0.0.1:4173/login";
 const dashboardLoginURL = productionBaseURL
   ? new URL("/dash/login", productionBaseURL).toString()
   : "http://127.0.0.1:4175/dash/login";
 const trackURL = productionBaseURL
-  ? new URL("/app/track", productionBaseURL).toString()
-  : "http://127.0.0.1:4173/app/track";
+  ? new URL("/track", productionBaseURL).toString()
+  : "http://127.0.0.1:4173/track";
 
 async function expectPageAndAssetsToRender(
   page: Page,
@@ -45,107 +57,76 @@ async function expectPageAndAssetsToRender(
   expect(runtimeErrors).toEqual([]);
 }
 
-async function installCitizenTrackerMocks(page: Page) {
-  const userId = "00000000-0000-4000-8000-000000000101";
-  let status = "citizen_confirmation";
+const CITIZEN_RECORD: TestRecord = {
+  id: "00000000-0000-4000-8000-000000000101",
+  email: "citizen@example.invalid",
+  verified: true,
+  role: "citizen",
+  full_name: "Test Citizen",
+  phone_verified: true,
+  created: "2026-10-20T00:00:00.000Z",
+  updated: "2026-10-20T00:00:00.000Z",
+};
+
+/** PocketBase session + auth-refresh + the tracker's gamfix routes. */
+async function installCitizenTrackerMocks(page: Page, initialStatus = "citizen_confirmation") {
+  let status = initialStatus;
   let citizenAction: Record<string, unknown> | null = null;
-  const headers = {
-    "access-control-allow-origin": new URL(trackURL).origin,
-    "access-control-allow-headers": "apikey,authorization,content-type,x-client-info,prefer,range",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
-    "content-type": "application/json",
-  };
 
-  await page.route("**/rest/v1/**", async (route) => {
-    const request = route.request();
-    const pathname = new URL(request.url()).pathname;
-    if (request.method() === "OPTIONS") {
-      await route.fulfill({ status: 204, headers });
-      return;
-    }
+  await seedPocketBaseSession(page, CITIZEN_RECORD);
 
-    if (pathname.endsWith("/rpc/track_complaint")) {
-      await route.fulfill({
-        status: 200,
-        headers,
-        body: JSON.stringify({
-          tracking_no: "GC-TEST-001",
-          status,
-          urgency: "high",
-          title: "Street light is out",
-          description: "The street light has been out for several nights.",
-          institution: "NAWEC",
-          department: null,
-          expected_response_at: null,
-          resolved_at: status === "closed" ? "2026-10-20T12:00:00.000Z" : null,
-          closed_at: status === "closed" ? "2026-10-20T13:00:00.000Z" : null,
-          timeline: [],
-        }),
-      });
-      return;
-    }
-
-    if (pathname.endsWith("/rpc/fn_can_confirm_report")) {
-      await route.fulfill({ status: 200, headers, body: "true" });
-      return;
-    }
-    if (pathname.endsWith("/rpc/fn_dashboard_access")) {
-      await route.fulfill({ status: 200, headers, body: JSON.stringify({ ok: true, role: "citizen" }) });
-      return;
-    }
-    if (pathname.endsWith("/rpc/confirm_complaint")) {
-      citizenAction = request.postDataJSON() as Record<string, unknown>;
-      status = "closed";
-      await route.fulfill({ status: 200, headers, body: "true" });
-      return;
-    }
-    if (pathname.endsWith("/rpc/reopen_complaint")) {
-      citizenAction = request.postDataJSON() as Record<string, unknown>;
-      status = "reopened";
-      await route.fulfill({ status: 200, headers, body: "true" });
-      return;
-    }
-    if (pathname.endsWith("/profiles")) {
-      await route.fulfill({
-        status: 200,
-        headers,
-        body: JSON.stringify({
-          user_id: userId,
-          email: "citizen@example.invalid",
-          role: "citizen",
-          full_name: "Test Citizen",
-          phone_verified: true,
-          email_verified: true,
-        }),
-      });
-      return;
-    }
-
-    await route.fulfill({ status: 404, headers, body: JSON.stringify({ message: "Unexpected test request" }) });
+  // The shell's verification gate re-reads the record via getProfile().
+  await page.route("**/api/collections/users/records/" + CITIZEN_RECORD.id, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(CITIZEN_RECORD),
+    });
   });
 
-  const session = {
-    access_token: "test-access-token",
-    refresh_token: "test-refresh-token",
-    token_type: "bearer",
-    expires_in: 3600,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: {
-      id: userId,
-      aud: "authenticated",
-      role: "authenticated",
-      email: "citizen@example.invalid",
-      app_metadata: { provider: "email", providers: ["email"] },
-      user_metadata: {},
-      identities: [],
-      created_at: "2026-10-20T00:00:00.000Z",
-    },
-  };
-  await page.addInitScript((storedSession) => {
-    for (const reference of ["example", "api", "ci-placeholder"]) {
-      window.localStorage.setItem(`sb-${reference}-auth-token`, JSON.stringify(storedSession));
-    }
-  }, session);
+  const trackResult = () => ({
+    tracking_no: "GC-TEST-001",
+    status,
+    urgency: "high",
+    title: "Street light is out",
+    description: "The street light has been out for several nights.",
+    institution: "NAWEC",
+    department: null,
+    expected_response_at: null,
+    resolved_at: ["citizen_confirmation", "closed"].includes(status)
+      ? "2026-10-20T12:00:00.000Z"
+      : null,
+    closed_at: status === "closed" ? "2026-10-20T13:00:00.000Z" : null,
+    timeline: [
+      { status: "received", message: "Report received.", at: "2026-10-20T08:00:00.000Z" },
+      { status: "assigned", message: "Report assigned to an officer.", at: "2026-10-20T09:00:00.000Z" },
+      { status: "in_progress", message: "An officer has started work.", at: "2026-10-20T10:00:00.000Z" },
+      ...(status === "citizen_confirmation" || status === "closed"
+        ? [{ status: "citizen_confirmation", message: "Fix reported: the street light was replaced.", at: "2026-10-20T12:00:00.000Z" }]
+        : []),
+    ],
+  });
+
+  await page.route("**/api/gamfix/track", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(trackResult()),
+    });
+  });
+  await page.route("**/api/gamfix/can-confirm", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "true" });
+  });
+  await page.route("**/api/gamfix/confirm", async (route) => {
+    citizenAction = route.request().postDataJSON() as Record<string, unknown>;
+    status = "closed";
+    await route.fulfill({ status: 200, contentType: "application/json", body: "true" });
+  });
+  await page.route("**/api/gamfix/reopen", async (route) => {
+    citizenAction = route.request().postDataJSON() as Record<string, unknown>;
+    status = "reopened";
+    await route.fulfill({ status: 200, contentType: "application/json", body: "true" });
+  });
 
   return { citizenAction: () => citizenAction };
 }
@@ -175,7 +156,7 @@ for (const viewport of [
 
 test("dashboard login route redirects to the shared sign-in page", async ({ page }) => {
   await page.goto(dashboardLoginURL);
-  await expect(page).toHaveURL(/\/app\/login\/?$/);
+  await expect(page).toHaveURL(/\/login\/?$/);
   if (productionBaseURL) {
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   }
@@ -183,30 +164,7 @@ test("dashboard login route redirects to the shared sign-in page", async ({ page
 
 test("citizen tracker shows six readable stages on mobile and labels the reported fix consistently", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.route("**/rest/v1/rpc/track_complaint", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        tracking_no: "GC-TEST-001",
-        status: "citizen_confirmation",
-        urgency: "high",
-        title: "Street light is out",
-        description: "The street light has been out for several nights.",
-        institution: "NAWEC",
-        department: null,
-        expected_response_at: null,
-        resolved_at: "2026-10-20T12:00:00.000Z",
-        closed_at: null,
-        timeline: [
-          { status: "received", message: "Report received.", at: "2026-10-20T08:00:00.000Z" },
-          { status: "assigned", message: "Report assigned to an officer.", at: "2026-10-20T09:00:00.000Z" },
-          { status: "in_progress", message: "An officer has started work.", at: "2026-10-20T10:00:00.000Z" },
-          { status: "citizen_confirmation", message: "Fix reported: the street light was replaced.", at: "2026-10-20T12:00:00.000Z" },
-        ],
-      }),
-    });
-  });
+  await installCitizenTrackerMocks(page);
 
   await page.goto(`${trackURL}?ref=GC-TEST-001`);
   await expect(page.getByRole("heading", { name: "Street light is out" })).toBeVisible();

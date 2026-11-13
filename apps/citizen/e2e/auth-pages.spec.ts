@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
+// The citizen app is served at the domain root since the VPS consolidation:
+// /login and /signup (no /app prefix). Assets live under /assets/.
+
 async function expectAuthPageToRender(
   page: Page,
   route: string,
@@ -14,7 +17,7 @@ async function expectAuthPageToRender(
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
   page.on("response", (response) => {
     const pathname = new URL(response.url()).pathname;
-    if (!pathname.startsWith("/app/assets/")) return;
+    if (!pathname.startsWith("/assets/")) return;
     if (/\.(js|css)$/.test(pathname)) {
       if (response.status() >= 400) {
         assetFailures.push(`${response.status()} ${pathname}`);
@@ -52,11 +55,12 @@ for (const viewport of [
     test("login page renders with its assets", async ({ page }) => {
       await expectAuthPageToRender(
         page,
-        "/app/login",
+        "/login",
         "Welcome back",
         ["Email", "Password"],
         "Sign in",
       );
+      // PocketBase's native email+password flow only — no 6-digit code screens.
       await expect(
         page.getByRole("button", { name: "Sign in with an email code", exact: true }),
       ).toHaveCount(0);
@@ -65,7 +69,7 @@ for (const viewport of [
     test("signup page renders with its assets", async ({ page }) => {
       await expectAuthPageToRender(
         page,
-        "/app/signup",
+        "/signup",
         "Create your GamFix account",
         ["Full name", "Email", "Password"],
         "Sign up",

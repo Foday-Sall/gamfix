@@ -1,80 +1,51 @@
 import { expect, test } from "@playwright/test";
+import { seedPocketBaseSession, type TestRecord } from "./pb-session";
+
+// Phone verification against the app's own server routes (phone-otp.pb.js):
+//  POST /api/gamfix/phone-otp/send   { phone }  → { sent: true, ... }
+//  POST /api/gamfix/phone-otp/verify { phone, code }
+// The session is the real PocketBase authStore shape (see pb-session.ts);
+// getProfile() then reads the record via GET /api/collections/users/records/{id}.
+
+const USER_ID = "00000000-0000-4000-8000-000000000301";
+
+const userRecord: TestRecord = {
+  id: USER_ID,
+  email: "citizen@example.invalid",
+  verified: true,
+  role: "citizen",
+  full_name: "Test Citizen",
+  phone_verified: false,
+  created: "2026-10-20T00:00:00.000Z",
+  updated: "2026-10-20T00:00:00.000Z",
+};
 
 test("requesting a new WhatsApp code clears the previously entered code", async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 390, height: 844 });
 
-  const profile = {
-    user_id: "00000000-0000-4000-8000-000000000301",
-    email: "citizen@example.invalid",
-    role: "citizen",
-    full_name: "Test Citizen",
-    phone_verified: false,
-    email_verified: true,
-  };
-  const session = {
-    access_token: "test-access-token",
-    refresh_token: "test-refresh-token",
-    token_type: "bearer",
-    expires_in: 3600,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: {
-      id: profile.user_id,
-      aud: "authenticated",
-      role: "authenticated",
-      email: profile.email,
-      app_metadata: { provider: "email", providers: ["email"] },
-      user_metadata: {},
-      identities: [],
-      created_at: "2026-10-20T00:00:00.000Z",
-    },
-  };
-  await page.addInitScript((storedSession) => {
-    for (const projectRef of ["ci-placeholder", "api", "example"]) {
-      window.localStorage.setItem(`sb-${projectRef}-auth-token`, JSON.stringify(storedSession));
-    }
-  }, session);
+  await seedPocketBaseSession(page, userRecord);
+
+  await page.route("**/api/collections/users/records/" + USER_ID, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(userRecord),
+    });
+  });
 
   const sendPhones: string[] = [];
-  await page.route("**/rest/v1/**", async (route) => {
-    const request = route.request();
-    const origin = request.headers().origin ?? "*";
-    const headers = {
-      "access-control-allow-origin": origin,
-      "access-control-allow-headers": "apikey,authorization,content-type,x-client-info,prefer,range",
-      "access-control-allow-methods": "GET,POST,OPTIONS",
-      "content-type": "application/json",
-    };
-    if (request.method() === "OPTIONS") {
-      await route.fulfill({ status: 204, headers });
-      return;
-    }
-    if (new URL(request.url()).pathname.endsWith("/profiles")) {
-      await route.fulfill({ status: 200, headers, body: JSON.stringify(profile) });
-      return;
-    }
-    await route.fulfill({ status: 404, headers, body: JSON.stringify({ message: "Unexpected test request" }) });
-  });
-
-  await page.route("**/functions/v1/auth-verify/**", async (route) => {
-    const request = route.request();
-    const origin = request.headers().origin ?? "*";
-    const headers = {
-      "access-control-allow-origin": origin,
-      "access-control-allow-headers": "apikey,authorization,content-type,x-client-info",
-      "access-control-allow-methods": "POST,OPTIONS",
-      "content-type": "application/json",
-    };
-    if (request.method() === "OPTIONS") {
-      await route.fulfill({ status: 204, headers });
-      return;
-    }
-    const body = request.postDataJSON() as { phone?: string };
+  await page.route("**/api/gamfix/phone-otp/send", async (route) => {
+    const body = route.request().postDataJSON() as { phone?: string };
     sendPhones.push(body.phone ?? "");
-    await route.fulfill({ status: 200, headers, body: JSON.stringify({ sent: true, message: "Code sent" }) });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ sent: true, message: "We sent a verification code to your WhatsApp." }),
+    });
   });
 
-  await page.goto("/app/verify/phone");
+  await page.goto("/verify/phone");
   await expect(page.getByText("Verify your phone", { exact: true })).toBeVisible();
   await page.getByLabel("Phone number").fill("7123456");
   const sendButton = page.getByRole("button", { name: "Send code on WhatsApp" });
@@ -90,4 +61,30 @@ test("requesting a new WhatsApp code clears the previously entered code", async 
 
   await expect(codeInput).toHaveValue("");
   expect(sendPhones).toEqual(["2207123456", "2207123456"]);
+});
+
+test("the send route's rejection is surfaced as a readable message", async ({ page }) => {
+  await seedPocketBaseSession(page, userRecord);
+
+  await page.route("**/api/collections/users/records/" + USER_ID, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(userRecord),
+    });
+  });
+  await page.route("**/api/gamfix/phone-otp/send", async (route) => {
+    await route.fulfill({
+      status: 429,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Too many codes requested. Please wait before trying again." }),
+    });
+  });
+
+  await page.goto("/verify/phone");
+  await page.getByLabel("Phone number").fill("7123456");
+  await page.getByRole("button", { name: "Send code on WhatsApp" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(/too many/i);
+  await expect(page.getByLabel("6-digit WhatsApp code")).toHaveCount(0);
 });

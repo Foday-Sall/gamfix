@@ -1,4 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
+import { seedPocketBaseSession, type TestRecord } from "./pb-session";
+
+// The staff console (/dash) talks to PocketBase directly:
+//  - session: the PB JS SDK's authStore ({token, record} under the
+//    localStorage key "pocketbase_auth"), validated on load with
+//    POST /api/collections/users/auth-refresh
+//  - bootstrap: POST /api/gamfix/access → { ok, role, institution }
+//  - queue feed: GET /api/collections/complaints/records?page=…&filter=(institution = '<id>')
+//    (realtime updates ride on GET /api/realtime, an SSE stream)
+//  - aggregates + actions: POST /api/gamfix/staff/stats|map|complaint|accept|status|resolution
+//  - evidence photos: protected file URLs signed with POST /api/files/token
 
 const productionBaseURL = process.env.BASE_URL;
 const dashboardBaseURL = productionBaseURL
@@ -38,12 +49,14 @@ const stats = {
   ],
 };
 
-const corsHeaders = {
-  "access-control-allow-origin": dashboardOrigin,
-  "access-control-allow-credentials": "true",
-  "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
-  "access-control-allow-headers": "apikey,authorization,content-type,x-client-info,prefer,accept,range",
-  "access-control-max-age": "86400",
+const OFFICER_RECORD: TestRecord = {
+  id: officerId,
+  email: "officer@example.invalid",
+  verified: true,
+  role: "officer",
+  institution: institutionId,
+  created: "2026-01-01T00:00:00.000Z",
+  updated: "2026-01-01T00:00:00.000Z",
 };
 
 async function installOfficerMocks(
@@ -58,260 +71,187 @@ async function installOfficerMocks(
   let resolutionPhotoPath: string | null = null;
   let resolutionNote: string | null = null;
   let resolutionPhotoParamWasNull = false;
-  let resolutionPhotoUploadAttempted = false;
   let reopenedReportWasRestarted = false;
 
-  await page.route("**/rest/v1/**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const method = request.method();
+  await seedPocketBaseSession(page, OFFICER_RECORD);
 
-    if (method === "OPTIONS") {
-      await route.fulfill({ status: 204, headers: corsHeaders });
+  await page.route("**/api/collections/users/records/*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(OFFICER_RECORD),
+    });
+  });
+
+  // Bootstrap: who is signed in, and for which institution?
+  await page.route("**/api/gamfix/access", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        role: "officer",
+        institution: { id: institutionId, code: "NAWEC", name: "NAWEC", logo_url: null },
+      }),
+    });
+  });
+
+  // Queue feed (PB getList page shape; realtime rides on /api/realtime below).
+  await page.route("**/api/collections/complaints/records**", async (route) => {
+    if (failDashboardData) {
+      await route.abort("internetdisconnected");
       return;
     }
-
-    if (url.pathname.endsWith("/rpc/fn_dashboard_access")) {
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify({
-          ok: true,
-          role: "officer",
-          institution: { id: institutionId, code: "NAWEC", name: "NAWEC", logo_url: null },
-        }),
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/profiles")) {
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify({ role: "officer" }),
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/officers")) {
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify({
-          institution_id: institutionId,
-          is_active: true,
-          institutions: { name: "NAWEC" },
-        }),
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/complaints")) {
-      if (failDashboardData) {
-        await route.abort("internetdisconnected");
-        return;
-      }
-      complaintQueryWasInstitutionScoped =
-        url.searchParams.get("institution_id") === `eq.${institutionId}`;
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify([
+    const url = new URL(route.request().url());
+    complaintQueryWasInstitutionScoped =
+      (url.searchParams.get("filter") ?? "").includes(institutionId);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        page: 1,
+        perPage: 200,
+        totalItems: 1,
+        totalPages: 1,
+        items: [
           {
             id: "00000000-0000-4000-8000-000000000333",
-            institution_id: institutionId,
-            tracking_no: "GC-NAWEC-001",
-            title: "Low water pressure",
-            status: complaintStatus,
-            urgency: "normal",
-            created_at: "2026-10-19T10:00:00.000Z",
-            updated_at: "2026-10-19T11:00:00.000Z",
-          },
-        ]),
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/rpc/fn_institution_dashboard_stats")) {
-      if (failDashboardData) {
-        await route.abort("internetdisconnected");
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify(stats),
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/rpc/fn_institution_map_complaints")) {
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify({ ok: true, complaints: [], total: 0, scope: "institution" }),
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/rpc/fn_officer_accept")) {
-      complaintStatus = "assigned";
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: "true",
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/rpc/fn_officer_set_status")) {
-      const body = request.postDataJSON() as { p_status?: string };
-      if (body.p_status === "in_progress" && ["assigned", "waiting_info", "reopened"].includes(complaintStatus)) {
-        if (complaintStatus === "reopened") reopenedReportWasRestarted = true;
-        complaintStatus = "in_progress";
-      }
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify(complaintStatus === "in_progress"),
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/rpc/fn_officer_report_resolution")) {
-      const body = request.postDataJSON() as { p_citizen_message?: string; p_resolution_photo_url?: string | null };
-      complaintStatus = "citizen_confirmation";
-      resolutionNote = body.p_citizen_message ?? null;
-      resolutionPhotoParamWasNull = body.p_resolution_photo_url === null;
-      resolutionPhotoPath = body.p_resolution_photo_url ?? null;
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: "true",
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/rpc/fn_officer_complaint_detail")) {
-      detailCalls += 1;
-      const photoPath = delayedCitizenPhoto && detailCalls > 1
-        ? "00000000-0000-4000-8000-000000000333/photo.png"
-        : null;
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify({
-          ok: true,
-          complaint: {
-            id: "00000000-0000-4000-8000-000000000333",
+            institution: institutionId,
+            citizen: "00000000-0000-4000-8000-000000000444",
             tracking_no: "GC-NAWEC-001",
             title: "Low water pressure",
             description: "Water pressure is low across the neighbourhood.",
             status: complaintStatus,
             urgency: "normal",
-            category: "Water supply",
-            lat: 13.45,
-            lng: -16.67,
-            region: "Kanifing",
-            council_area: "Kanifing Municipal Council",
-            ward: "Kanifing",
-            created_at: delayedCitizenPhoto
-              ? new Date(Date.now() - 30_000).toISOString()
-              : "2026-10-19T10:00:00.000Z",
-            updated_at: "2026-10-19T11:00:00.000Z",
             is_anonymous: !delayedCitizenPhoto,
-            photo_url: photoPath,
-            resolution_photo_url: resolutionPhotoPath,
-            resolution_note: resolutionNote,
-            contact: null,
+            created: "2026-10-19T10:00:00.000Z",
+            updated: "2026-10-19T11:00:00.000Z",
+            collectionId: "_pb_collections_meta_",
+            collectionName: "complaints",
           },
-        }),
-      });
-      return;
-    }
-
-    await route.fulfill({
-      status: 404,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-      body: JSON.stringify({ message: "Unexpected test request" }),
+        ],
+      }),
     });
   });
 
-  await page.route("**/storage/v1/object/**", async (route) => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
-    const signMarker = "/object/sign/complaint-photos/";
-    const objectMarker = "/object/complaint-photos/";
-
-    if (url.pathname.includes(signMarker)) {
-      const objectPath = decodeURIComponent(url.pathname.slice(url.pathname.indexOf(signMarker) + signMarker.length));
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify({ signedURL: `/storage/v1/object/sign/complaint-photos/${objectPath}?token=test-token` }),
-      });
-      return;
-    }
-
-    if (method === "POST" && url.pathname.includes(objectMarker)) {
-      resolutionPhotoUploadAttempted = true;
-      const objectPath = decodeURIComponent(url.pathname.slice(url.pathname.indexOf(objectMarker) + objectMarker.length));
-      resolutionPhotoPath = objectPath;
-      await route.fulfill({
-        status: 200,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-        body: JSON.stringify({ Key: objectPath }),
-      });
-      return;
-    }
-
-    await route.fulfill({ status: 200, headers: corsHeaders, body: "" });
+  // PocketBase realtime (SSE). No events are delivered in the test.
+  await page.route("**/api/realtime**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: "",
+    });
   });
 
-  await page.routeWebSocket(/\/realtime\/v1\/websocket/, (socket) => {
-    socket.close();
+  await page.route("**/api/gamfix/staff/stats", async (route) => {
+    if (failDashboardData) {
+      await route.abort("internetdisconnected");
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(stats),
+    });
   });
 
-  const projectRefs = productionBaseURL ? ["api"] : ["ci-placeholder", "api"];
-  const fakeSession = {
-    access_token: "test-access-token",
-    refresh_token: "test-refresh-token",
-    token_type: "bearer",
-    expires_in: 3600,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: {
-      id: officerId,
-      aud: "authenticated",
-      role: "authenticated",
-      email: "officer@example.invalid",
-      app_metadata: { provider: "email", providers: ["email"] },
-      user_metadata: {},
-      identities: [],
-      created_at: "2026-01-01T00:00:00.000Z",
-    },
-  };
+  await page.route("**/api/gamfix/staff/map", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, complaints: [], total: 0, scope: "institution" }),
+    });
+  });
 
-  await page.addInitScript(
-    ({ storageKeys, session }) => {
-      for (const storageKey of storageKeys) {
-        window.localStorage.setItem(storageKey, JSON.stringify(session));
-      }
-    },
-    { storageKeys: projectRefs.map((projectRef) => `sb-${projectRef}-auth-token`), session: fakeSession },
-  );
+  await page.route("**/api/gamfix/staff/accept", async (route) => {
+    complaintStatus = "assigned";
+    await route.fulfill({ status: 200, contentType: "application/json", body: "true" });
+  });
+
+  await page.route("**/api/gamfix/staff/status", async (route) => {
+    const body = route.request().postDataJSON() as { p_status?: string };
+    if (body.p_status === "in_progress" && ["assigned", "waiting_info", "reopened"].includes(complaintStatus)) {
+      if (complaintStatus === "reopened") reopenedReportWasRestarted = true;
+      complaintStatus = "in_progress";
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(complaintStatus === "in_progress"),
+    });
+  });
+
+  await page.route("**/api/gamfix/staff/resolution", async (route) => {
+    const body = route.request().postDataJSON() as {
+      p_citizen_message?: string;
+      p_resolution_photo_url?: string | null;
+    };
+    complaintStatus = "citizen_confirmation";
+    resolutionNote = body.p_citizen_message ?? null;
+    resolutionPhotoParamWasNull = body.p_resolution_photo_url === null;
+    resolutionPhotoPath = body.p_resolution_photo_url ?? null;
+    await route.fulfill({ status: 200, contentType: "application/json", body: "true" });
+  });
+
+  await page.route("**/api/gamfix/staff/complaint", async (route) => {
+    detailCalls += 1;
+    // A photo attached to the PB record after the dialog first opened is
+    // picked up by the dialog's follow-up detail call.
+    const photoPath = delayedCitizenPhoto && detailCalls > 1
+      ? `/api/files/complaints/00000000-0000-4000-8000-000000000333/photo.png`
+      : null;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        complaint: {
+          id: "00000000-0000-4000-8000-000000000333",
+          tracking_no: "GC-NAWEC-001",
+          title: "Low water pressure",
+          description: "Water pressure is low across the neighbourhood.",
+          status: complaintStatus,
+          urgency: "normal",
+          category: "Water supply",
+          lat: 13.45,
+          lng: -16.67,
+          region: "Kanifing",
+          council_area: "Kanifing Municipal Council",
+          ward: "Kanifing",
+          created_at: delayedCitizenPhoto
+            ? new Date(Date.now() - 30_000).toISOString()
+            : "2026-10-19T10:00:00.000Z",
+          updated_at: "2026-10-19T11:00:00.000Z",
+          is_anonymous: !delayedCitizenPhoto,
+          photo_url: photoPath,
+          resolution_photo_url: resolutionPhotoPath,
+          resolution_note: resolutionNote,
+          contact: null,
+        },
+      }),
+    });
+  });
+
+  // Protected-file signing: the dialog mints a short-lived file token.
+  await page.route("**/api/files/token", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ token: "test-file-token" }),
+    });
+  });
 
   return {
     complaintQueryWasInstitutionScoped: () => complaintQueryWasInstitutionScoped,
     detailCalls: () => detailCalls,
     resolutionPhotoParamWasNull: () => resolutionPhotoParamWasNull,
-    resolutionPhotoUploadAttempted: () => resolutionPhotoUploadAttempted,
     reopenedReportWasRestarted: () => reopenedReportWasRestarted,
   };
 }
 
 test("signed-out visitors cannot open the institution dashboard", async ({ page }) => {
   await page.goto(new URL("/dash/", dashboardOrigin).toString());
-  await expect(page).toHaveURL(/\/app\/login\/?$/);
+  await expect(page).toHaveURL(/\/login\/?$/);
   if (productionBaseURL) {
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   }
@@ -380,7 +320,8 @@ test("report details pick up a citizen photo attached after the dialog first ope
   await expect(details.getByText("Checking for a recently uploaded photo...")).toBeVisible();
   const photo = details.getByRole("img", { name: "Photo submitted with report GC-NAWEC-001" });
   await expect(photo).toBeVisible({ timeout: 10_000 });
-  await expect(photo).toHaveAttribute("src", /complaint-photos/);
+  // Protected file: the URL is a PB /api/files/… URL signed with a file token.
+  await expect(photo).toHaveAttribute("src", /api\/files\/complaints\/.*token=/);
   expect(mocks.detailCalls()).toBeGreaterThanOrEqual(2);
 });
 
@@ -409,7 +350,6 @@ test("officers can accept a report, start work, and report a fix without uploadi
   await expect(details.getByText("Fix reported", { exact: true })).toBeVisible();
   await expect(details.getByText("No resolution photo has been added.", { exact: true })).toBeVisible();
   expect(mocks.resolutionPhotoParamWasNull()).toBe(true);
-  expect(mocks.resolutionPhotoUploadAttempted()).toBe(false);
 });
 
 test("officers can restart work after a citizen reopens a report", async ({ page }) => {

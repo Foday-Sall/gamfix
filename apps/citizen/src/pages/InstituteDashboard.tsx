@@ -241,7 +241,9 @@ export default function InstituteDashboard() {
     pb.collection('institutions')
       .getOne(institutionId)
       .then((record) => {
-        if (alive) setInstitutionLogo((record.logo as string | null) ?? null)
+        // `logo` is the PocketBase filename — build the real file URL with the
+        // SDK (institutions.logo is a public field, no file token needed).
+        if (alive) setInstitutionLogo(record.logo ? pb.files.getURL(record, String(record.logo)) : null)
       })
       .catch(() => {})
     return () => {

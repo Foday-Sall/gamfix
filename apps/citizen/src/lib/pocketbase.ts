@@ -97,6 +97,24 @@ export async function handleAuthExpired(): Promise<void> {
 }
 
 /**
+ * URL for a file on a Protected file field (docs: Files handling → Protected
+ * files). Mints the SDK's short-lived file token (POST /api/files/token via
+ * pb.files.getToken()) and lets PocketBase build the URL — `thumb` asks the
+ * server for a generated thumbnail instead of the multi-MB original.
+ */
+export async function protectedFileUrl(
+  record: RecordModel,
+  filename: string,
+  thumb?: string,
+): Promise<string> {
+  if (!filename) return ''
+  const token = await pb.files.getToken()
+  const options: Record<string, string> = { token }
+  if (thumb) options.thumb = thumb
+  return pb.files.getURL(record, filename, options)
+}
+
+/**
  * POST one of the app's own gamfix server routes (gamfix.pb.js and friends)
  * with a JSON body. Throws the SDK's ClientResponseError on failure — pages
  * catch it and read err.status / err.response.message.

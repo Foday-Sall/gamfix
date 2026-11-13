@@ -419,6 +419,11 @@ onRecordUpdateRequest((e) => {
   try {
     const auth = e.auth
     if (!auth) return e.error(401, 'Authentication required.')
+    // Superusers are trusted infrastructure (the WhatsApp router attaches
+    // downloaded report photos with its service credentials).
+    try {
+      if (auth.collection().name === '_superusers') return e.next()
+    } catch (_) {}
     const record = e.record
     const original = record.original()
     const role = auth.getString('role')

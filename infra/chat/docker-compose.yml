@@ -1,0 +1,87 @@
+# gamfix-chat stack — the WhatsApp REPORT CHAT bot.
+#
+# Completely separate from the OTP gowa (container "gowa", port 3000,
+# /opt/gowa/*): own container, own port (3001), own volumes (/opt/gowa-chat/*),
+# own WhatsApp session/number.
+#
+#   gowa-chat    — GOWA device for the public bot number; webhooks to wa-router
+#   wa-router    — the bot brain: recognises verified citizens by phone, runs
+#                  the report state machine, submits via the wa-bot PB hook
+#   cloudflared  — optional Cloudflare Tunnel (profile "tunnel", needs
+#                  CF_TUNNEL_TOKEN) or ephemeral quick tunnel (profile
+#                  "quicktunnel") so the QR page is reachable from a phone
+name: gamfix-chat
+
+services:
+  gowa-chat:
+    image: aldinokemal2104/go-whatsapp-web-multidevice:latest
+    container_name: gowa-chat
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      - APP_BASIC_AUTH=${GOWA_CHAT_BASIC_AUTH}
+      - APP_PORT=3000
+      - APP_DEBUG=false
+      - APP_OS=Chrome
+      - TZ=UTC
+      - WHATSAPP_WEBHOOK=http://wa-router:8080/webhook?secret=${WEBHOOK_SECRET}
+      - WHATSAPP_WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - WHATSAPP_WEBHOOK_EVENTS=message
+      - WHATSAPP_AUTO_DOWNLOAD_MEDIA=true
+      - WHATSAPP_AUTO_REPLY=false
+      - WHATSAPP_AUTO_MARK_READ=false
+    volumes:
+      - /opt/gowa-chat/statics:/app/statics
+      - /opt/gowa-chat/storages:/app/storages
+
+  wa-router:
+    build: /opt/gamfix-src/apps/wa-router
+    image: gamfix-wa-router:latest
+    container_name: wa-router
+    restart: unless-stopped
+    depends_on:
+      - gowa-chat
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      - PORT=8080
+      - GOWA_BASE_URL=http://gowa-chat:3000
+      - GOWA_BASIC_AUTH_USER=gowa-chat
+      - GOWA_BASIC_AUTH_PASS=${GOWA_CHAT_PASS}
+      - PB_BASE_URL=https://host.docker.internal
+      - PB_HOST_HEADER=gamfix.pocketsoftware.dev
+      - PB_SU_EMAIL=${PB_SU_EMAIL}
+      - PB_SU_PASSWORD=${PB_SU_PASSWORD}
+      - WA_BOT_SECRET=${WA_BOT_SECRET}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - APP_PUBLIC_URL=https://gamfix.pocketsoftware.dev
+      - STATE_DIR=/data
+      - MEDIA_ROOT=/media
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /opt/gamfix-chat/wa-data:/data
+      - /opt/gowa-chat/statics:/media:ro
+
+  # Named Cloudflare Tunnel (stable hostname) — start with:
+  #   docker compose --profile tunnel up -d   (CF_TUNNEL_TOKEN set in .env)
+  cloudflared-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: gamfix-cloudflared
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CF_TUNNEL_TOKEN}"]
+    depends_on:
+      - gowa-chat
+
+  # Ephemeral free quick tunnel (no account needed) — used until the named
+  # tunnel is configured. URL printed in `docker logs gamfix-quicktunnel`.
+  cloudflared-quick:
+    image: cloudflare/cloudflared:latest
+    container_name: gamfix-quicktunnel
+    restart: unless-stopped
+    profiles: ["quicktunnel"]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://gowa-chat:3000"]
+    depends_on:
+      - gowa-chat

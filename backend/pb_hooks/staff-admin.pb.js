@@ -16,7 +16,7 @@ routerAdd('POST', '/api/gamfix/access', (e) => {
     const user = $app.findRecordById('users', e.auth.id)
     const email = user.getString('email').toLowerCase()
 
-    if (user.getString('role') === 'admin' && email === 'admin@pocketsoftware.dev') {
+    if (user.getString('role') === 'admin' && ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(email) !== -1) {
       return e.json(200, { ok: true, role: 'admin' })
     }
 
@@ -71,7 +71,7 @@ routerAdd('POST', '/api/gamfix/staff/complaints', (e) => {
     if (!e.auth) return e.json(401, { error: STAFF_NOTE })
     const user = $app.findRecordById('users', e.auth.id)
     const isAdmin = user.getString('role') === 'admin' &&
-      user.getString('email').toLowerCase() === 'admin@pocketsoftware.dev'
+      ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(user.getString('email').toLowerCase()) !== -1
 
     let filter = ''
     let instId = null
@@ -215,7 +215,7 @@ routerAdd('POST', '/api/gamfix/staff/complaint', (e) => {
 
     const user = $app.findRecordById('users', e.auth.id)
     const isAdmin = user.getString('role') === 'admin' &&
-      user.getString('email').toLowerCase() === 'admin@pocketsoftware.dev'
+      ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(user.getString('email').toLowerCase()) !== -1
     let instId = null
     if (!isAdmin) {
       const instIdField = user.getString('institution')
@@ -356,7 +356,7 @@ routerAdd('POST', '/api/gamfix/staff/accept', (e) => {
     const isOfficer = user.getString('role') === 'officer' && instIdField && rows.length &&
       rows[0].getString('institution') === instIdField
     const isAdmin = user.getString('role') === 'admin' &&
-      user.getString('email').toLowerCase() === 'admin@pocketsoftware.dev'
+      ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(user.getString('email').toLowerCase()) !== -1
     if (!isAdmin && !isOfficer) return e.json(200, false)
 
     let body = {}
@@ -413,7 +413,7 @@ routerAdd('POST', '/api/gamfix/staff/status', (e) => {
     const isOfficer = user.getString('role') === 'officer' && instIdField && rows.length &&
       rows[0].getString('institution') === instIdField
     const isAdmin = user.getString('role') === 'admin' &&
-      user.getString('email').toLowerCase() === 'admin@pocketsoftware.dev'
+      ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(user.getString('email').toLowerCase()) !== -1
     if (!isAdmin && !isOfficer) return e.json(200, false)
 
     let body = {}
@@ -497,7 +497,7 @@ routerAdd('POST', '/api/gamfix/staff/resolution', (e) => {
     const isOfficer = user.getString('role') === 'officer' && instIdField && rows.length &&
       rows[0].getString('institution') === instIdField
     const isAdmin = user.getString('role') === 'admin' &&
-      user.getString('email').toLowerCase() === 'admin@pocketsoftware.dev'
+      ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(user.getString('email').toLowerCase()) !== -1
     if (!isAdmin && !isOfficer) return e.json(200, false)
 
     let row = null
@@ -626,7 +626,7 @@ routerAdd('POST', '/api/gamfix/staff/map', (e) => {
 
     const user = $app.findRecordById('users', e.auth.id)
     const isAdmin = user.getString('role') === 'admin' &&
-      user.getString('email').toLowerCase() === 'admin@pocketsoftware.dev'
+      ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(user.getString('email').toLowerCase()) !== -1
     let instId = null
     if (!isAdmin) {
       const instIdField = user.getString('institution')

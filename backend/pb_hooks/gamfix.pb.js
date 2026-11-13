@@ -422,7 +422,7 @@ onRecordUpdateRequest((e) => {
     const record = e.record
     const original = record.original()
     const role = auth.getString('role')
-    if (role === 'admin' && auth.getString('email').toLowerCase() === 'admin@pocketsoftware.dev') {
+    if (role === 'admin' && ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(auth.getString('email').toLowerCase()) !== -1) {
       return e.next()
     }
     if (record.getString('citizen') !== auth.id) {

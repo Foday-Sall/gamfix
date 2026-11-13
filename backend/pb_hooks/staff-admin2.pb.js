@@ -2,7 +2,8 @@
 // admin-secrets and admin-whatsapp (backend/db 0011 semantics).
 // PocketBase serializes each route handler into an isolated JSVM runtime, so
 // every helper is declared INSIDE its handler. Only the exact-email admin
-// account (admin@pocketsoftware.dev with role=admin) may call these routes.
+// accounts on the ADMIN_EMAILS allowlist (default: admin@pocketsoftware.dev,
+// salldevvv@gmail.com — role=admin) may call these routes.
 
 // ---- POST /api/gamfix/admin (14 panel actions) ------------------------------
 routerAdd('POST', '/api/gamfix/admin', (e) => {
@@ -10,7 +11,7 @@ routerAdd('POST', '/api/gamfix/admin', (e) => {
     if (!e.auth) return e.json(401, { error: 'invalid_token' })
     const user = $app.findRecordById('users', e.auth.id)
     const adminEmail = user.getString('email').toLowerCase()
-    const isAdmin = user.getString('role') === 'admin' && adminEmail === 'admin@pocketsoftware.dev'
+    const isAdmin = user.getString('role') === 'admin' && ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(adminEmail) !== -1
     if (!isAdmin) return e.json(401, { error: 'invalid_token' })
 
     let body = {}
@@ -332,7 +333,7 @@ routerAdd('POST', '/api/gamfix/admin-secrets', (e) => {
     if (!e.auth) return e.json(401, { error: 'invalid_token' })
     const user = $app.findRecordById('users', e.auth.id)
     const adminEmail = user.getString('email').toLowerCase()
-    const isAdmin = user.getString('role') === 'admin' && adminEmail === 'admin@pocketsoftware.dev'
+    const isAdmin = user.getString('role') === 'admin' && ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(adminEmail) !== -1
     if (!isAdmin) return e.json(401, { error: 'invalid_token' })
 
     let body = {}

@@ -10,7 +10,7 @@ routerAdd('POST', '/api/gamfix/admin-whatsapp', (e) => {
     if (!e.auth) return e.json(401, { error: 'invalid_token' })
     const user = $app.findRecordById('users', e.auth.id)
     const isAdmin = user.getString('role') === 'admin' &&
-      user.getString('email').toLowerCase() === 'admin@pocketsoftware.dev'
+      ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(user.getString('email').toLowerCase()) !== -1
     if (!isAdmin) return e.json(401, { error: 'invalid_token' })
 
     let body = {}

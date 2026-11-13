@@ -26,7 +26,7 @@ function resolveStaffScope(e) {
   const isOfficer = user.getString('role') === 'officer' && instIdField && rows.length &&
     rows[0].getString('institution') === instIdField
   const isAdmin = user.getString('role') === 'admin' &&
-    user.getString('email').toLowerCase() === 'admin@pocketsoftware.dev'
+    ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(user.getString('email').toLowerCase()) !== -1
   if (!isAdmin && !isOfficer) return { ok: false }
   return { ok: true, isAdmin: isAdmin, officer: isOfficer ? rows[0] : null, user: user, instId: instIdField }
 }

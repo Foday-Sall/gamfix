@@ -113,7 +113,7 @@ routerAdd('POST', '/api/gamfix/complaints', (e) => {
         candidate.set('council_area', String(body.p_council_area || ''))
         candidate.set('region', String(body.p_region || ''))
         candidate.set('ward', String(body.p_ward || ''))
-        candidate.set('landmark', String(body.p_ward || ''))
+        candidate.set('landmark', String(body.p_landmark || body.p_ward || ''))
         candidate.set('is_anonymous', !!body.p_is_anonymous)
         candidate.set('lat', toNum(body.p_lat))
         candidate.set('lng', toNum(body.p_lng))

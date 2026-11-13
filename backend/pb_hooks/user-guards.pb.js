@@ -50,6 +50,14 @@ onRecordUpdateRequest((e) => {
       ;['role', 'verified', 'phone_verified', 'phone'].forEach((field) => {
         e.record.set(field, before.get(field))
       })
+      // Email rebind guard: PocketBase keeps verified=true when the email
+      // changes, which would let an account rebind to an address it does not
+      // own while keeping its verified status. Force re-verification instead.
+      const beforeEmail = String(before.getString('email') || '').toLowerCase()
+      const afterEmail = String(e.record.getString('email') || '').toLowerCase()
+      if (afterEmail && afterEmail !== beforeEmail) {
+        e.record.set('verified', false)
+      }
     }
   } catch (err) {
     console.log('GamFix user update guard failed:', String(err || err))

@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { LogOut, Mail, ShieldCheck, User } from 'lucide-react'
+import { LogOut, Mail, Phone, ShieldCheck, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -22,7 +22,7 @@ import { SignOutDialog } from '@/components/ConfirmDialogs'
 
 export const APP_VERSION = '1.1.0'
 
-/** Max avatar size: must match storage.buckets.file_size_limit (5 MB). */
+/** Max avatar size: 5 MB — PocketBase default body/file cap territory. */
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -51,7 +51,7 @@ export default function Profile() {
   // Load the profile row once the session is known.
   useEffect(() => {
     let cancelled = false
-    const uid = session?.user.id
+    const uid = session?.id
     if (!uid) return
     pb.collection('users')
       .getOne(uid)
@@ -66,7 +66,7 @@ export default function Profile() {
     return () => {
       cancelled = true
     }
-  }, [session?.user.id])
+  }, [session?.id])
 
   async function signOut() {
     setSigningOut(true)
@@ -82,8 +82,8 @@ export default function Profile() {
   }
 
   async function saveName() {
-    if (!session?.user) return
-    const uid = session.user.id
+    if (!session) return
+    const uid = session.id
     const trimmed = fullName.trim()
     if (!trimmed) {
       setMsg({ kind: 'err', text: "Name can't be empty." })
@@ -108,7 +108,7 @@ export default function Profile() {
     const file = event.target.files?.[0]
     // Reset so picking the same file again still fires change.
     event.target.value = ''
-    if (!file || !session?.user) return
+    if (!file || !session) return
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
       setMsg({ kind: 'err', text: 'Please choose a JPEG, PNG or WebP image.' })
       return
@@ -120,7 +120,7 @@ export default function Profile() {
     setUploading(true)
     setMsg(null)
     try {
-      const uid = session.user.id
+      const uid = session.id
       // The avatar is a PocketBase file field on the users record; the SDK
       // uploads it via multipart form data and serves it through pb.files.
       const record = await pb.collection('users').update(uid, { avatar: file })
@@ -148,17 +148,18 @@ export default function Profile() {
 
   if (!session) return <Navigate to="/login" replace />
 
-  const user = session.user
-  const meta = user.user_metadata ?? {}
+  // The session IS the PocketBase auth record (see useSession) — no wrapper.
+  const user = session
   const displayName =
     savedName ||
     name ||
-    (meta.full_name as string) ||
-    (meta.name as string) ||
+    user.full_name?.trim() ||
+    user.name?.trim() ||
     user.email ||
     'Your account'
   const email = user.email
-  const createdAt = user.created_at ? new Date(user.created_at) : null
+  const phone = user.phone
+  const createdAt = user.created ? new Date(user.created) : null
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-5 py-8 md:px-6">
@@ -251,6 +252,13 @@ export default function Profile() {
                 <span className="text-muted-foreground">Email</span>
                 <span className="ml-auto truncate font-medium" title={email ?? undefined}>
                   {email ?? '—'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Phone className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <span className="text-muted-foreground">Phone (WhatsApp)</span>
+                <span className="ml-auto truncate font-medium" title={phone ?? undefined}>
+                  {phone ? `+${phone}` : '—'}
                 </span>
               </div>
               <div className="flex items-center gap-3">

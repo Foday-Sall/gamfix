@@ -279,6 +279,18 @@ routerAdd('POST', '/api/gamfix/staff/complaint', (e) => {
     const fileUrl = (collection, recordId, name) =>
       fileBase().replace(/\/?$/, '/') + 'api/files/' + collection + '/' + recordId + '/' + name
 
+    // Citizen profile photo: the users collection is owner-only (view rule),
+    // so officers can't token-fetch the protected avatar file. Point the
+    // dialog at the authorized streaming route below instead.
+    if (contact) {
+      try {
+        const cit = $app.findRecordById('users', row.getString('citizen'))
+        contact.avatar = cit.getString('avatar')
+          ? fileBase().replace(/\/?$/, '/') + 'api/gamfix/staff/citizen-avatar?complaint=' + row.id
+          : null
+      } catch (_) { contact.avatar = null }
+    }
+
     let photoUrl = null
     let resolutionPhotoUrl = null
     let photos = []
@@ -692,3 +704,76 @@ routerAdd('POST', '/api/gamfix/staff/map', (e) => {
     return e.json(200, { ok: false, error: 'map_failed' })
   }
 }, $apis.requireAuth('users'))
+
+// ---- GET /api/gamfix/staff/citizen-avatar?complaint=<id> -------------------
+// Streams the citizen's profile photo for the complaint-detail dialog. The
+// users view rule is strictly owner-only, so a file token minted for an
+// officer can never read the protected avatar file; this route re-uses the
+// complaint-detail authorization scope instead. Docs: Routing (e.stream),
+// Files (record.baseFilesPath + fsys.getFile).
+routerAdd('GET', '/api/gamfix/staff/citizen-avatar', (e) => {
+  try {
+    // <img> tags can't send Authorization headers: also accept the token the
+    // dashboard's URL signer appends (?token=<file token>, or an auth token).
+    let staff = e.auth
+    if (!staff) {
+      const qt = String((e.requestInfo().query || {}).token || '')
+      if (qt) {
+        try { staff = $app.findAuthRecordByToken(qt, 'file') } catch (_) { staff = null }
+        if (!staff) { try { staff = $app.findAuthRecordByToken(qt, 'auth') } catch (_) { staff = null } }
+      }
+    }
+    if (!staff) return e.json(200, { ok: false, error: 'not_authorized' })
+    const complaintId = String((e.requestInfo().query || {}).complaint || '')
+    if (!complaintId) return e.json(200, { ok: false, error: 'not_found' })
+
+    staff = $app.findRecordById('users', staff.id)
+    const isAdmin = staff.getString('role') === 'admin' &&
+      ($os.getenv('ADMIN_EMAILS') || 'admin@pocketsoftware.dev,salldevvv@gmail.com').toLowerCase().split(',').map(function (s) { return s.trim() }).indexOf(staff.getString('email').toLowerCase()) !== -1
+    let instId = null
+    if (!isAdmin) {
+      const instIdField = staff.getString('institution')
+      const rows = instIdField
+        ? $app.findRecordsByFilter('officers', 'user = {:u} && is_active = true', '', 1, 0, { u: staff.id })
+        : []
+      if (staff.getString('role') !== 'officer' || !instIdField || !rows.length ||
+          rows[0].getString('institution') !== instIdField) {
+        return e.json(200, { ok: false, error: 'not_authorized' })
+      }
+      instId = instIdField
+    }
+
+    let row = null
+    try { row = $app.findRecordById('complaints', complaintId) } catch (_) { row = null }
+    if (!row || (instId && row.getString('institution') !== instId)) {
+      return e.json(200, { ok: false, error: 'not_found' })
+    }
+    if (row.getBool('is_anonymous')) return e.json(200, { ok: false, error: 'not_found' })
+
+    let citizen = null
+    try { citizen = $app.findRecordById('users', row.getString('citizen')) } catch (_) { citizen = null }
+    if (!citizen) return e.json(200, { ok: false, error: 'not_found' })
+    const original = citizen.getString('avatar') || ''
+    if (!original) return e.json(200, { ok: false, error: 'no_avatar' })
+
+    // Prefer the 300x300 thumb (PB names thumbs thumb_<size>_<filename>);
+    // fall back to the original upload. Serve by extension-sniffed MIME.
+    const fsys = $app.newFilesystem()
+    const base = citizen.baseFilesPath()
+    let lower = original.toLowerCase()
+    let mime = 'image/jpeg'
+    if (lower.endsWith('.png')) mime = 'image/png'
+    else if (lower.endsWith('.webp')) mime = 'image/webp'
+    let reader = null
+    try {
+      try { reader = fsys.getFile(base + '/thumb_300x300_' + original) } catch (_) { reader = null }
+      if (!reader) reader = fsys.getFile(base + '/' + original)
+      return e.stream(200, mime, reader)
+    } finally {
+      if (reader) { try { reader.close() } catch (_) {} }
+      try { fsys.close() } catch (_) {}
+    }
+  } catch (err) {
+    return e.json(200, { ok: false, error: 'avatar_failed' })
+  }
+})

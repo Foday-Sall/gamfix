@@ -140,7 +140,7 @@ export default function InstituteDashboard() {
   // role plus an officers row links the account to an institution.
   useEffect(() => {
     if (sessionLoading) return
-    const user = session?.user
+    const user = session
     if (!user) {
       setRoleChecked(true)
       return
@@ -160,7 +160,7 @@ export default function InstituteDashboard() {
     return () => {
       cancelled = true
     }
-  }, [sessionLoading, session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionLoading, session?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Full load of the institution's complaint feed (newest first). */
   const loadFeed = useCallback(async (institutionId: string) => {

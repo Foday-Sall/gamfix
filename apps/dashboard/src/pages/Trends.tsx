@@ -3,7 +3,7 @@
 // so the overview stays focused on workload metrics.
 
 import { useEffect, useState } from 'react'
-import { rpc, type OfficerStats } from '../lib/pb'
+import { gamfixPost, type OfficerStats } from '../lib/pb'
 import { statusMeta } from '../lib/meta'
 import { BarList, LoadError, Loading, PageHead, Panel, TrendLineChart } from '../components/ui'
 
@@ -21,7 +21,7 @@ export function Trends() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    rpc<OfficerStats>('/api/gamfix/staff/stats')
+    gamfixPost<OfficerStats>('/api/gamfix/staff/stats')
       .then((s) => (s.ok ? setStats(s) : setError(true)))
       .catch(() => setError(true))
   }, [])

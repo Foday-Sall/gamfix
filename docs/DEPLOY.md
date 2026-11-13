@@ -113,7 +113,7 @@ Requirements: Docker with compose (`docker compose`, or legacy
 `docker-compose` v1 — both work).
 
 ```bash
-git clone https://github.com/Foday-Sall/gamfix-SL.git && cd gamfix-SL
+git clone https://github.com/Foday-Sall/gamfix.git && cd gamfix
 
 # one-time: fetch a PocketBase binary for the image
 ./infra/docker/fetch-pb.sh                  # latest public release
@@ -130,8 +130,8 @@ That's it. You now have:
 
 | URL | What |
 | --- | --- |
-| `http://<host>:$WEB_PORT/` | landing |
-| `http://<host>:$WEB_PORT/app/` | citizen app |
+| `http://<host>:$WEB_PORT/landing/` (+ `/` splash) | landing |
+| `http://<host>:$WEB_PORT/` | citizen app (root paths; `/app/*` redirects) |
 | `http://<host>:$WEB_PORT/dash/` | staff dashboard |
 | `http://<host>:$WEB_PORT/api/` | PocketBase API |
 | `http://<host>:$WEB_PORT/_/` | PocketBase admin UI |
@@ -162,7 +162,7 @@ Production runs: nginx (TLS, static frontends, API proxy) + PocketBase via
 systemd + GOWA as a Docker container. Deploy changes with the script:
 
 ```bash
-# on the VPS, with the repo at ~/gamfix-SL
+# on the VPS, with the repo at ~/gamfix
 ./scripts/deploy_vps_ui.sh citizen     # build + deploy citizen app
 ./scripts/deploy_vps_ui.sh landing     # build + deploy landing
 ./scripts/deploy_vps_ui.sh dashboard   # deploy dist snapshot (no build)

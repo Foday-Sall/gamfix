@@ -14,7 +14,7 @@ import {
   TextInput,
 } from '@astryxdesign/core'
 import { Building2, Plus } from 'lucide-react'
-import { adminRpc, type Institution } from '../lib/pb'
+import { adminAction, type Institution } from '../lib/pb'
 import { Loading, PageHead, Panel } from '../components/ui'
 import { useToast } from '@astryxdesign/core'
 
@@ -29,7 +29,7 @@ export function InstitutionsPage() {
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {
-    adminRpc<Institution[]>('getInstitutions')
+    adminAction<Institution[]>('getInstitutions')
       .then((list) => setRows(Array.isArray(list) ? list : []))
       .catch(() => setRows([]))
   }, [])
@@ -39,7 +39,7 @@ export function InstitutionsPage() {
   const create = async () => {
     setBusy(true)
     try {
-      const res = await adminRpc<{ ok: boolean; error?: string }>('createInstitution', {
+      const res = await adminAction<{ ok: boolean; error?: string }>('createInstitution', {
         p_name: name.trim(),
         p_shortcode: shortcode.trim(),
         p_contact_email: email.trim(),

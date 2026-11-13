@@ -1,7 +1,8 @@
 import PocketBase, { ClientResponseError, type RecordModel } from 'pocketbase'
 
 /**
- * The real PocketBase JS SDK, straight up — no Supabase-shaped wrapper.
+ * The real PocketBase JS SDK, used directly — every page calls
+ * pb.collection(...), pb.files... and pb.send(...) with nothing in between.
  *
  * Everything in the app calls the SDK directly:
  *   pb.collection('users').authWithPassword(...)     — sign in

@@ -7,13 +7,14 @@ of institutions (officers/admins) process the reports until they are fixed.
 - **Backend**: PocketBase (single Go binary + SQLite) with the entire API
   implemented as JS hooks — no other server code.
 - **Frontends**: React + Vite + Tailwind (citizen app, landing site) and a
-  staff/admin dashboard (dist snapshot; source lost, see `docs/ARCHITECTURE.md`).
+  staff/admin dashboard (compiled snapshot in production; reference source
+  in `apps/dashboard/src`, see `docs/ARCHITECTURE.md`).
 - **WhatsApp OTP**: self-hosted GOWA gateway (go-whatsapp-web-multidevice).
 
 ## Repository layout
 
 ```
-gamfix-SL/
+gamfix/
 ├── apps/
 │   ├── citizen/        citizen app source (React + Vite + Tailwind + PB JS SDK)
 │   ├── landing/        marketing site source (static, no API calls)

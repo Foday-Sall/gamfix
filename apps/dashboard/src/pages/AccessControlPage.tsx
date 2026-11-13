@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, EmptyState, Heading, Text, TextInput } from '@astryxdesign/core'
 import { Save } from 'lucide-react'
-import { adminRpc, pb, type Category, type Institution } from '../lib/pb'
+import { adminAction, pb, type Category, type Institution } from '../lib/pb'
 import { Loading, PageHead, Panel } from '../components/ui'
 import { useToast } from '@astryxdesign/core'
 
@@ -30,7 +30,7 @@ export function AccessControlPage() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    adminRpc<Institution[]>('getInstitutions')
+    adminAction<Institution[]>('getInstitutions')
       .then((list) => {
         const rows = Array.isArray(list) ? list : []
         setInstitutions(rows)
@@ -46,7 +46,7 @@ export function AccessControlPage() {
   const load = useCallback(() => {
     if (!instId) return
     setLimits(null)
-    adminRpc<Limits & { ok?: boolean }>('getAccessLimits', { p_institution_id: instId })
+    adminAction<Limits & { ok?: boolean }>('getAccessLimits', { p_institution_id: instId })
       .then((res) => setLimits(res))
       .catch(() => setLimits(null))
   }, [instId])
@@ -71,10 +71,10 @@ export function AccessControlPage() {
     setBusy(true)
     try {
       const results = await Promise.all([
-        adminRpc<{ ok?: boolean; error?: string }>('setAccessLevel', { p_institution_id: instId, p_level: limits.access_level }),
-        adminRpc<{ ok?: boolean; error?: string }>('setAllowedCategories', { p_institution_id: instId, p_categories: limits.allowed_categories }),
-        adminRpc<{ ok?: boolean; error?: string }>('setSlaHours', { p_institution_id: instId, p_hours: limits.sla_hours }),
-        adminRpc<{ ok?: boolean; error?: string }>('setRateLimit', { p_institution_id: instId, p_max: limits.max_complaints_per_day }),
+        adminAction<{ ok?: boolean; error?: string }>('setAccessLevel', { p_institution_id: instId, p_level: limits.access_level }),
+        adminAction<{ ok?: boolean; error?: string }>('setAllowedCategories', { p_institution_id: instId, p_categories: limits.allowed_categories }),
+        adminAction<{ ok?: boolean; error?: string }>('setSlaHours', { p_institution_id: instId, p_hours: limits.sla_hours }),
+        adminAction<{ ok?: boolean; error?: string }>('setRateLimit', { p_institution_id: instId, p_max: limits.max_complaints_per_day }),
       ])
       const failed = results.find((r) => r.error)
       if (failed) {

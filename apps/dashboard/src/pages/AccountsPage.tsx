@@ -14,7 +14,7 @@ import {
   TextInput,
 } from '@astryxdesign/core'
 import { Copy, UserPlus } from 'lucide-react'
-import { adminRpc, type Institution, type Officer } from '../lib/pb'
+import { adminAction, type Institution, type Officer } from '../lib/pb'
 import { formatDate } from '../lib/meta'
 import { Loading, PageHead, Panel } from '../components/ui'
 import { useToast } from '@astryxdesign/core'
@@ -27,10 +27,10 @@ export function AccountsPage() {
   const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null)
 
   const load = useCallback(() => {
-    adminRpc<Officer[]>('getOfficers')
+    adminAction<Officer[]>('getOfficers')
       .then((list) => setRows(Array.isArray(list) ? list : []))
       .catch(() => setRows([]))
-    adminRpc<Institution[]>('getInstitutions')
+    adminAction<Institution[]>('getInstitutions')
       .then((list) => setInstitutions(Array.isArray(list) ? list : []))
       .catch(() => setInstitutions([]))
   }, [])
@@ -40,7 +40,7 @@ export function AccountsPage() {
   const toggle = async (officer: Officer, next: boolean) => {
     setRows((prev) => prev && prev.map((o) => (o.id === officer.id ? { ...o, is_active: next } : o)))
     try {
-      await adminRpc('toggleOfficerActive', { p_officer_id: officer.id, p_active: next })
+      await adminAction('toggleOfficerActive', { p_officer_id: officer.id, p_active: next })
       toast({ body: `${officer.name} ${next ? 'reactivated' : 'deactivated'}`, type: 'success' })
     } catch {
       toast({ body: 'Could not update the officer.', type: 'error' })
@@ -170,7 +170,7 @@ function CreateDialog({
   const submit = async () => {
     setBusy(true)
     try {
-      const res = await adminRpc<{ ok: boolean; error?: string; officer?: Officer; temporaryPassword?: string }>(
+      const res = await adminAction<{ ok: boolean; error?: string; officer?: Officer; temporaryPassword?: string }>(
         'createOfficer',
         { p_name: name.trim(), p_email: email.trim(), p_institution_id: instId, p_role: role, p_department: department.trim() },
       )

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Card, Dialog, DialogHeader, EmptyState, Heading, Text, TextArea, TextInput } from '@astryxdesign/core'
 import { Search } from 'lucide-react'
-import { adminRpc, fileWithToken, rpc, type ComplaintDetail, type ComplaintRow, type Institution } from '../lib/pb'
+import { adminAction, gamfixPost, signedFileUrl, type ComplaintDetail, type ComplaintRow, type Institution } from '../lib/pb'
 import { formatDate, OPEN_STATUSES, statusMeta, titleCase } from '../lib/meta'
 import { Loading, PageHead, StatusBadge, UrgencyBadge } from '../components/ui'
 import { useToast } from '@astryxdesign/core'
@@ -17,7 +17,7 @@ export function Complaints({ canForward }: { canForward: boolean }) {
   const [selected, setSelected] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    rpc<{ ok: boolean; complaints: ComplaintRow[] }>('/api/gamfix/staff/complaints')
+    gamfixPost<{ ok: boolean; complaints: ComplaintRow[] }>('/api/gamfix/staff/complaints')
       .then((res) => setRows(res.complaints || []))
       .catch(() => setError(true))
   }, [])
@@ -149,13 +149,23 @@ export function ComplaintDialog({
   const [text, setText] = useState('')
   const [target, setTarget] = useState('')
   const [busy, setBusy] = useState(false)
+  // Evidence photos sit on Protected file fields: the URL must be signed
+  // with a short-lived file token before the browser can load it.
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    rpc<{ ok: boolean; complaint: ComplaintDetail }>('/api/gamfix/staff/complaint', { p_complaint_id: complaintId })
-      .then((res) => (res.ok ? setDetail(res.complaint) : setFailed(true)))
+    gamfixPost<{ ok: boolean; complaint: ComplaintDetail }>('/api/gamfix/staff/complaint', { p_complaint_id: complaintId })
+      .then(async (res) => {
+        if (!res.ok) {
+          setFailed(true)
+          return
+        }
+        setDetail(res.complaint)
+        setPhotoUrl(res.complaint.photo_url ? await signedFileUrl(res.complaint.photo_url) : null)
+      })
       .catch(() => setFailed(true))
     if (canForward) {
-      adminRpc<Institution[]>('getInstitutions')
+      adminAction<Institution[]>('getInstitutions')
         .then((list) => setInstitutions(Array.isArray(list) ? list.filter((i) => i.status === 'active') : []))
         .catch(() => setInstitutions([]))
     }
@@ -178,13 +188,13 @@ export function ComplaintDialog({
     setBusy(true)
     try {
       let ok = false
-      if (action === 'accept') ok = await rpc<boolean>('/api/gamfix/staff/accept', { p_complaint_id: detail.id })
-      else if (action === 'start') ok = await rpc<boolean>('/api/gamfix/staff/status', { p_complaint_id: detail.id, p_status: 'in_progress' })
-      else if (action === 'fix') ok = await rpc<boolean>('/api/gamfix/staff/resolution', { p_complaint_id: detail.id, p_citizen_message: text.trim() })
-      else if (action === 'request-info') ok = await rpc<boolean>('/api/gamfix/staff/request-info', { p_complaint_id: detail.id, p_message: text.trim() })
-      else if (action === 'reject') ok = await rpc<boolean>('/api/gamfix/staff/reject', { p_complaint_id: detail.id, p_reason: text.trim() })
-      else if (action === 'forward') ok = await rpc<boolean>('/api/gamfix/staff/forward', { p_complaint_id: detail.id, p_institution_id: target, p_reason: text.trim() })
-      else if (action === 'proof') ok = await rpc<boolean>('/api/gamfix/staff/proof', { p_complaint_id: detail.id, p_photo_url: text.trim() })
+      if (action === 'accept') ok = await gamfixPost<boolean>('/api/gamfix/staff/accept', { p_complaint_id: detail.id })
+      else if (action === 'start') ok = await gamfixPost<boolean>('/api/gamfix/staff/status', { p_complaint_id: detail.id, p_status: 'in_progress' })
+      else if (action === 'fix') ok = await gamfixPost<boolean>('/api/gamfix/staff/resolution', { p_complaint_id: detail.id, p_citizen_message: text.trim() })
+      else if (action === 'request-info') ok = await gamfixPost<boolean>('/api/gamfix/staff/request-info', { p_complaint_id: detail.id, p_message: text.trim() })
+      else if (action === 'reject') ok = await gamfixPost<boolean>('/api/gamfix/staff/reject', { p_complaint_id: detail.id, p_reason: text.trim() })
+      else if (action === 'forward') ok = await gamfixPost<boolean>('/api/gamfix/staff/forward', { p_complaint_id: detail.id, p_institution_id: target, p_reason: text.trim() })
+      else if (action === 'proof') ok = await gamfixPost<boolean>('/api/gamfix/staff/proof', { p_complaint_id: detail.id, p_photo_url: text.trim() })
       if (ok) {
         toast({ body: form.label + ' — done', type: 'success' })
         setAction(null)
@@ -258,7 +268,7 @@ export function ComplaintDialog({
             {detail.photo_url ? (
               <div className="photo-frame">
                 <Heading level={5} weight="semibold">Citizen photo</Heading>
-                <img src={fileWithToken(detail.photo_url)} alt="Complaint photo" />
+                <img src={photoUrl ?? detail.photo_url} alt="Complaint photo" />
               </div>
             ) : null}
 

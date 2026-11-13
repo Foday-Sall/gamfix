@@ -14,7 +14,7 @@ import {
   Timer,
   TrendingUp,
 } from 'lucide-react'
-import { adminRpc, rpc, type AdminStats, type OfficerStats, type Session } from '../lib/pb'
+import { adminAction, gamfixPost, type AdminStats, type OfficerStats, type Session } from '../lib/pb'
 import { statusMeta } from '../lib/meta'
 import {
   BarList,
@@ -40,7 +40,7 @@ function AdminOverview() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    adminRpc<AdminStats>('getOverviewStats')
+    adminAction<AdminStats>('getOverviewStats')
       .then((s) => (s.ok || typeof s.total === 'number' ? setStats(s) : setError(true)))
       .catch(() => setError(true))
   }, [])
@@ -87,7 +87,7 @@ function OfficerOverview() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    rpc<OfficerStats>('/api/gamfix/staff/stats')
+    gamfixPost<OfficerStats>('/api/gamfix/staff/stats')
       .then((s) => (s.ok ? setStats(s) : setError(true)))
       .catch(() => setError(true))
   }, [])

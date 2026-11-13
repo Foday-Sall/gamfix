@@ -1,4 +1,4 @@
-// PocketBase client + typed RPC helpers for the GamFix staff console.
+// PocketBase client + typed helpers for the GamFix staff console.
 
 import PocketBase from 'pocketbase'
 
@@ -7,7 +7,7 @@ import PocketBase from 'pocketbase'
 const env = import.meta.env as Record<string, string | undefined>
 export const PB_URL: string = env.VITE_PB_URL || window.location.origin
 export const pb = new PocketBase(PB_URL)
-// All admin RPCs share one endpoint (/api/gamfix/admin) — concurrent calls
+// All admin actions share one endpoint (/api/gamfix/admin) — concurrent calls
 // would cancel each other under the SDK default auto-cancellation.
 pb.autoCancellation(false)
 
@@ -61,24 +61,37 @@ export function logout() {
   pb.authStore.clear()
 }
 
-// ---- RPC helpers -----------------------------------------------------------
+// ---- Server-route helpers ---------------------------------------------------
 
-export function rpc<T>(path: string, body: Record<string, unknown> = {}): Promise<T> {
+export function gamfixPost<T>(path: string, body: Record<string, unknown> = {}): Promise<T> {
   return pb.send<T>(path, { method: 'POST', body })
 }
 
-export function adminRpc<T>(action: string, params: Record<string, unknown> = {}): Promise<T> {
-  return rpc<T>('/api/gamfix/admin', { action, params })
+export function adminAction<T>(action: string, params: Record<string, unknown> = {}): Promise<T> {
+  return gamfixPost<T>('/api/gamfix/admin', { action, params })
 }
 
-export function whatsappRpc<T>(action: string, params: Record<string, unknown> = {}): Promise<T> {
-  return rpc<{ ok: boolean; data: T }>('/api/gamfix/admin-whatsapp', { action, params })
+export function whatsappAction<T>(action: string, params: Record<string, unknown> = {}): Promise<{ ok: boolean; data: T }> {
+  return gamfixPost<{ ok: boolean; data: T }>('/api/gamfix/admin-whatsapp', { action, params })
 }
 
-export function fileWithToken(url: string): string {
+/**
+ * Signed URL for a PocketBase Protected file (docs: Files handling →
+ * Protected files): mints a fresh short-lived file token with the SDK
+ * (POST /api/files/token via pb.files.getToken()) and appends it. Mirrors
+ * the deployed console dialog's signer — a leaked URL dies with the token.
+ */
+export async function signedFileUrl(url: string): Promise<string> {
   if (!url) return url
-  const joiner = url.includes('?') ? '&' : '?'
-  return url + joiner + 'token=' + encodeURIComponent(pb.authStore.token)
+  try {
+    const token = await pb.files.getToken()
+    const joiner = url.includes('?') ? '&' : '?'
+    return url + joiner + 'token=' + encodeURIComponent(token)
+  } catch (_) {
+    // Token minting failed (e.g. expired session); the bare URL will 404
+    // for protected files, which is the honest outcome.
+    return url
+  }
 }
 
 // ---- Shared DTOs -----------------------------------------------------------

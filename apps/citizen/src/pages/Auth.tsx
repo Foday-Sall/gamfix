@@ -130,7 +130,7 @@ export default function Auth({ initialMode }: { initialMode: 'signup' | 'signin'
 
   const isSignup = mode === 'signup'
 
-  // The Supabase OAuth callback can land back on /app/ with error query/fragment
+  // The OAuth2 redirect can land back on the app root with error query/fragment
   // parameters (e.g. an expired state when the user stalls on the Google consent
   // screen, or a denied consent). Parse them once and surface them here instead
   // of leaving the user on a silent-looking form.

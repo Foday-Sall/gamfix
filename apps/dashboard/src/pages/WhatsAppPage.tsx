@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Dialog, DialogHeader, EmptyState, Text, TextInput } from '@astryxdesign/core'
 import { Link2, RefreshCw, Trash2, Unplug } from 'lucide-react'
-import { whatsappRpc, type Session } from '../lib/pb'
+import { whatsappAction, type Session } from '../lib/pb'
 import { formatDate } from '../lib/meta'
 import { Loading, PageHead, Panel } from '../components/ui'
 import { useToast } from '@astryxdesign/core'
@@ -29,10 +29,10 @@ export function WhatsAppPage({ session }: { session: Session }) {
   const [pairing, setPairing] = useState<{ phone: string; code: string; role: string } | null>(null)
 
   const load = useCallback(() => {
-    whatsappRpc<{ numbers: NumberRow[] }>('list_numbers')
+    whatsappAction<{ numbers: NumberRow[] }>('list_numbers')
       .then((res) => setRows(res.data?.numbers || []))
       .catch(() => setRows([]))
-    whatsappRpc<{ sender: string | null; source: string }>('get_sender')
+    whatsappAction<{ sender: string | null; source: string }>('get_sender')
       .then((res) => setSender(res.data || null))
       .catch(() => setSender(null))
   }, [])
@@ -50,7 +50,7 @@ export function WhatsAppPage({ session }: { session: Session }) {
 
   const confirmLink = async (phone: string) => {
     try {
-      const res = await whatsappRpc<{ number: string; status: string; loggedIn: boolean; gowaState?: string }>('confirm_link', { phone })
+      const res = await whatsappAction<{ number: string; status: string; loggedIn: boolean; gowaState?: string }>('confirm_link', { phone })
       if (res.data.loggedIn) {
         toast({ body: `${phone} is now linked`, type: 'success' })
       } else {
@@ -64,7 +64,7 @@ export function WhatsAppPage({ session }: { session: Session }) {
 
   const setRole = async (phone: string, role: string) => {
     try {
-      await whatsappRpc('set_role', { phone, role })
+      await whatsappAction('set_role', { phone, role })
       toast({ body: `${phone} role set to ${role}`, type: 'success' })
       load()
     } catch (err: any) {
@@ -74,7 +74,7 @@ export function WhatsAppPage({ session }: { session: Session }) {
 
   const revoke = async (phone: string) => {
     try {
-      await whatsappRpc('revoke', { phone })
+      await whatsappAction('revoke', { phone })
       toast({ body: `${phone} revoked`, type: 'success' })
       load()
     } catch (err: any) {
@@ -84,7 +84,7 @@ export function WhatsAppPage({ session }: { session: Session }) {
 
   const remove = async (phone: string) => {
     try {
-      await whatsappRpc('delete_number', { phone })
+      await whatsappAction('delete_number', { phone })
       toast({ body: `${phone} deleted`, type: 'success' })
       load()
     } catch (err: any) {
@@ -205,7 +205,7 @@ function LinkDialog({ onClose, onLinked }: { onClose: () => void; onLinked: (pho
   const submit = async () => {
     setBusy(true)
     try {
-      const res = await whatsappRpc<{ number: string; pairingCode: string; role: string }>('start_link', {
+      const res = await whatsappAction<{ number: string; pairingCode: string; role: string }>('start_link', {
         phone: phone.replace(/[^0-9]/g, ''),
         role,
       })

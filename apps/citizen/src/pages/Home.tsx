@@ -1,7 +1,7 @@
 /**
  * /home — signed-in landing. Per redesign spec §3a/§3a':
  *  - Greeting + one primary CTA card (Report a problem), quick-track row.
- *  - "Your reports" list (recent, from RLS query) with skeletons.
+ *  - "Your reports" list (recent, from the PocketBase complaints query) with skeletons.
  *  - Desktop (≥1024px): 8/4 grid — left content, right "How GamFix works"
  *    and Emergencies cards. No header here: AppShell owns navigation.
  */

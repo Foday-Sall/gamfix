@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import { Spinner } from '@astryxdesign/core'
-import { rpc, type MapResponse, type Session } from '../lib/pb'
+import { gamfixPost, type MapResponse, type Session } from '../lib/pb'
 import { statusMeta } from '../lib/meta'
 import { PageHead, Panel } from '../components/ui'
 
@@ -36,7 +36,7 @@ export function MapPage({ session }: { session: Session }) {
       const b = map.getBounds()
       setLoading(true)
       try {
-        const res = await rpc<MapResponse>('/api/gamfix/staff/map', {
+        const res = await gamfixPost<MapResponse>('/api/gamfix/staff/map', {
           p_west: b.getWest(),
           p_south: b.getSouth(),
           p_east: b.getEast(),

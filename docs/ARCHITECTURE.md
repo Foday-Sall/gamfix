@@ -79,23 +79,26 @@ flow. GamFix chose code-based login (no passwords for citizens), so:
 ## Known source drift (honest note)
 
 The exact source of the last UI iteration of 2026-11-12 was partially lost
-with the dev environment. What is current in this repo:
+with the dev environment. Current state of this repo:
 
 - all backend hooks and migrations (pulled from the live server),
 - the landing app (rebuilds byte-identical to production),
-- the citizen app, **except** three changes that exist in production only in
-  compiled form: the mandatory WhatsApp onboarding step after Google OAuth,
-  Gambian-only `+220` client-side validation, and (restored from notes)
-  the `basename`-from-`BASE_URL` router fix, which IS applied here.
+- the citizen app — production builds FROM THIS SOURCE (the docker `web`
+  image runs `vite build`); the previously lost changes (WhatsApp onboarding
+  step, `+220` validation, router basename fix) are all present here,
+- the staff console (`apps/dashboard/`): production still runs the compiled
+  `dist/` snapshot; `src/` is the working reference source kept in sync with
+  the deployed behaviour — any console change ships as a patched, renamed
+  chunk until the console is rebuilt from source.
 
-The compiled production citizen app + dashboard are preserved in
-`apps/dashboard/` (staff console, build with `npm run build` in that folder).
+The compiled production citizen app + dashboard snapshots are preserved
+under `apps/dashboard/dist/`.
 
 ## History
 
 The original UI was taken 1:1 from the earlier public repo
-(`Foday-Sall/gamfix`), which was written against Supabase. Everything now
-runs on PocketBase — backend, database, auth and file storage are all
-PocketBase (see the stack table above); no Supabase service or SDK is used
-anywhere in this repo. That earlier repo remains on GitHub for reference;
-this repo is the source of truth.
+(`Foday-Sall/gamfix-SL`), which was written against a Supabase backend.
+Everything now runs on PocketBase — backend, database, auth and file storage
+are all PocketBase (see the stack table above); no Supabase service, SDK or
+naming remains anywhere in this repo. That earlier repo remains on GitHub
+for reference; this repo (`Foday-Sall/gamfix`) is the source of truth.

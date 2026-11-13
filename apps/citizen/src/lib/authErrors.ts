@@ -32,7 +32,7 @@ function isNetworkError(err: { name?: string; message?: string; code?: string })
   )
 }
 
-/** A GoTrue/HTTP status code carried on the error object, if any. */
+/** An HTTP status code carried on the error object, if any. */
 function errorStatus(err: { status?: number; statusCode?: number }): number | undefined {
   return err.status ?? err.statusCode
 }
@@ -48,8 +48,8 @@ function isReadable(message: string): boolean {
 
 /**
  * Map an auth failure (error object, {status,message} pair, or plain
- * message string) to a friendly sentence. Specific GoTrue errors win over
- * status codes; network failures always say "check your connection".
+ * message string) to a friendly sentence. Specific PocketBase auth messages
+ * win over status codes; network failures always say "check your connection".
  */
 export function friendlyAuthError(err: unknown): string {
   if (typeof err === 'string') return friendlyAuthError({ message: err })

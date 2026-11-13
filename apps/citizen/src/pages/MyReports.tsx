@@ -1,6 +1,7 @@
 /**
  * /my-reports — the signed-in user's submitted reports.
- * Queries complaints by RLS (citizen_id = auth.uid()), newest first.
+ * Queries complaints through the collection's API rules (citizen = the
+ * signed-in user), newest first.
  * Each row: status badge, title, tracking number, date → opens the tracker.
  * Per spec §2a: falls back to locally stored tracking numbers if the query fails.
  */

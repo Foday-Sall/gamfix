@@ -4,10 +4,10 @@
  * Navigation lives in AppShell. Sign out uses SignOutDialog (destructive).
  *
  * Profile editing: the owner can change their display name and upload an
- * avatar. Edits go straight to public.profiles (RLS limits self-updates to
- * the owner's row; trg_profile_column_guard blocks changing role/email/phone).
- * Avatars live in the public 'avatars' storage bucket under avatars/<uid>/ —
- * public read, owner-folder-only write.
+ * avatar. Both go straight to the PocketBase users record (the collection's
+ * update rule limits edits to the owner's row; user-guards.pb.js keeps
+ * role/email/phone server-controlled). The avatar is a Protected file field:
+ * URLs are signed with a short-lived file token via protectedFileUrl().
  */
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'

@@ -1,18 +1,18 @@
 /**
  * InstituteDashboard — the home page for institutional users (staff) inside
  * the citizen app. Lives under the shared AppShell; replaces the citizen home
- * content for users with a row in the `officers` table.
+ * content for users with a row in the `officers` collection.
  *
  * A live analytics view over the institution's complaints:
  *  - stat cards (today / open / resolved this week / avg resolution time),
  *  - a bar chart of complaints per category (last 7 days) and an area chart
  *    of complaints per day, computed client-side from the same query,
- *  - a live complaints feed driven by a Supabase Realtime subscription
- *    (INSERT + UPDATE on `complaints`, filtered by institution_id).
+ *  - a live complaints feed driven by a PocketBase realtime subscription
+ *    (pb.collection('complaints').subscribe, filtered by institution).
  *
- * Actions call the existing officer RPCs (backend/db/0004_officer.sql,
- * 0005_escalation.sql): accept, reject, request info, set status, attach
- * proof and forward.
+ * Actions call the app's own staff routes (/api/gamfix/staff/* in
+ * backend/pb_hooks/staff-actions.pb.js and staff-admin.pb.js): accept,
+ * reject, request info, set status, attach proof and forward.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Inbox, RefreshCw, Loader2 } from 'lucide-react'

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, EmptyState, Heading, Text, TextArea } from '@astryxdesign/core'
 import { Save } from 'lucide-react'
-import { adminRpc } from '../lib/pb'
+import { adminAction } from '../lib/pb'
 import { Loading, PageHead, Panel } from '../components/ui'
 import { useToast } from '@astryxdesign/core'
 
@@ -13,7 +13,7 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {
-    adminRpc<Record<string, unknown>>('getSettings')
+    adminAction<Record<string, unknown>>('getSettings')
       .then((value) => setRaw(JSON.stringify(value ?? {}, null, 2)))
       .catch(() => setRaw('{}'))
   }, [])
@@ -34,7 +34,7 @@ export function SettingsPage() {
     }
     setBusy(true)
     try {
-      const res = await adminRpc<{ ok: boolean; error?: string }>('saveSettings', { p_settings: parsed })
+      const res = await adminAction<{ ok: boolean; error?: string }>('saveSettings', { p_settings: parsed })
       if (res.ok) toast({ body: 'Settings saved', type: 'success' })
       else toast({ body: res.error || 'Could not save settings.', type: 'error' })
     } catch (err: any) {

@@ -50,7 +50,7 @@ const SERVER_HINT = 'Phone verification is temporarily unavailable. Please try a
 /**
  * Turn a failed send-phone-otp response into an honest message: the real
  * reason (invalid number vs rate limit) instead of a generic network error.
- * The edge functions return errors as { error: "..." } (older deployments)
+ * The server route returns errors as { error: "..." } (older deployments)
  * or { error, message } (newer); read both.
  */
 function classifySendError(status: number, message: string | undefined): string {
@@ -132,9 +132,8 @@ export default function VerifyPhone() {
     return () => clearTimeout(timer)
   }, [resendIn])
 
-  // The PocketBase client attaches the session token itself, so the old
-  // manual Supabase edge-function headers are gone; errors arrive as
-  // ClientResponseError with .status and .response.{error,message}.
+  // The PocketBase client attaches the session token itself, so errors arrive
+  // as ClientResponseError with .status and .response.{error,message}.
 
   async function sendCode(e?: React.FormEvent) {
     e?.preventDefault()

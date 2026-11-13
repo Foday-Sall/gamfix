@@ -1,10 +1,10 @@
 /**
  * /track - look up a report by tracking number and show its status timeline.
- * Data comes from the real `track_complaint` RPC (SECURITY DEFINER), which
- * works with or without an account; complaint rows themselves are not
- * anon-readable (RLS). Unknown numbers return null, which we show as "not
- * found". Network failures get their own message so a dead connection is not
- * mistaken for a bad tracking number.
+ * Data comes from the app's own server route POST /api/gamfix/track
+ * (gamfix.pb.js), which works with or without an account; the complaints
+ * collection's API rules do not allow anonymous list access. Unknown numbers
+ * return null, which we show as "not found". Network failures get their own
+ * message so a dead connection is not mistaken for a bad tracking number.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, EmptyState, TextInput } from '@astryxdesign/core'
 import { Search } from 'lucide-react'
-import { adminRpc, type AuditEntry } from '../lib/pb'
+import { adminAction, type AuditEntry } from '../lib/pb'
 import { formatDate } from '../lib/meta'
 import { Loading, PageHead, Panel } from '../components/ui'
 
@@ -25,7 +25,7 @@ export function AuditLogPage() {
   const [query, setQuery] = useState('')
 
   useEffect(() => {
-    adminRpc<AuditEntry[]>('getAuditLog', { p_limit: 300 })
+    adminAction<AuditEntry[]>('getAuditLog', { p_limit: 300 })
       .then((list) => setRows(Array.isArray(list) ? list : []))
       .catch(() => setRows([]))
   }, [])

@@ -1,7 +1,9 @@
 // Data + actions for institutional users (staff) inside the citizen app.
-// The officers table (backend/db/0004_officer.sql) ties an auth user to an
-// institution; its complaints feed is the institute dashboard's source.
-import { pbApi } from '@/lib/pocketbase'
+// The officers collection ties an auth user to an institution; its complaints
+// feed is the institute dashboard's source. Staff actions go through the
+// app's own gamfix server routes (staff-admin.pb.js / staff-actions.pb.js)
+// via pb.send — the server re-checks the caller's role and institution scope.
+import { pb, gamfix } from '@/lib/pocketbase'
 import { toast } from 'sonner'
 
 export type InstituteUser = {
@@ -25,32 +27,34 @@ export type InstituteDashboardStats = {
   daily: Array<{ date: string; received: number; resolved: number }>
 }
 
-/** Look up the signed-in user's officers row; null when they are not staff. */
+/** Look up the signed-in user's officers record; null when they are not staff. */
 export async function getInstituteUser(userId: string): Promise<InstituteUser | null> {
-  const { data, error } = await pbApi
-    .from('officers')
-    .select('id, institution_id, institutions(name)')
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (error || !data) return null
-  const inst = Array.isArray(data.institutions)
-    ? (data.institutions[0] as { name: string } | null)
-    : (data.institutions as { name: string } | null)
-  return {
-    officerId: data.id as string,
-    institutionId: data.institution_id as string,
-    institutionName: inst?.name ?? 'Institution',
+  try {
+    const officer = await pb.collection('officers').getFirstListItem(
+      pb.filter('user_id = {:uid}', { uid: userId }),
+      { expand: 'institution' },
+    )
+    const inst = officer.expand?.institution as { name?: string } | undefined
+    return {
+      officerId: officer.id,
+      institutionId: String(officer.institution ?? ''),
+      institutionName: inst?.name ?? 'Institution',
+    }
+  } catch {
+    return null
   }
 }
 
 /** Load aggregate metrics for the signed-in officer's institution only. */
 export async function getInstituteDashboardStats(): Promise<InstituteDashboardStats | null> {
-  const { data, error } = await pbApi.rpc('fn_institution_dashboard_stats')
-  if (error || !data || (data as { ok?: boolean }).ok === false) {
-    if (error) console.error('institution dashboard stats failed:', error.message)
+  try {
+    const data = await gamfix<InstituteDashboardStats>('/api/gamfix/staff/stats')
+    if (!data || (data as { ok?: boolean }).ok === false) return null
+    return data
+  } catch (error) {
+    console.error('institution dashboard stats failed:', error)
     return null
   }
-  return data as InstituteDashboardStats
 }
 
 const NOTE_MIN = 10
@@ -64,34 +68,40 @@ function requireNote(action: string): string | null {
   return note.trim()
 }
 
-/** Call one officer RPC; surface a friendly toast on failure. */
-async function callOfficerRpc(
-  rpc: string,
+/** Call one staff action route; surface a friendly toast on failure. */
+async function callStaffRoute(
+  path: string,
+  action: string,
   args: Record<string, unknown>,
   complaintId: string,
 ): Promise<boolean> {
-  const { error } = await pbApi.rpc(rpc, { p_complaint_id: complaintId, ...args })
-  if (error) {
-    toast.error(`Could not ${rpc.replace('fn_officer_', '').replaceAll('_', ' ')}: ${error.message}`)
+  try {
+    const outcome = await gamfix<boolean>(path, { p_complaint_id: complaintId, ...args })
+    if (outcome !== true) {
+      toast.error(`Could not ${action}. Open the report again and retry.`)
+      return false
+    }
+    return true
+  } catch (error) {
+    toast.error(`Could not ${action}: ${error instanceof Error ? error.message : 'try again'}`)
     return false
   }
-  return true
 }
 
 export async function officerAccept(complaintId: string): Promise<boolean> {
-  return callOfficerRpc('fn_officer_accept', {}, complaintId)
+  return callStaffRoute('/api/gamfix/staff/accept', 'accept', {}, complaintId)
 }
 
 export async function officerReject(complaintId: string): Promise<boolean> {
   const reason = requireNote('Reject')
   if (!reason) return false
-  return callOfficerRpc('fn_officer_reject', { p_reason: reason }, complaintId)
+  return callStaffRoute('/api/gamfix/staff/reject', 'reject', { p_reason: reason }, complaintId)
 }
 
 export async function officerRequestInfo(complaintId: string): Promise<boolean> {
   const message = requireNote('Request info')
   if (!message) return false
-  return callOfficerRpc('fn_officer_request_info', { p_message: message }, complaintId)
+  return callStaffRoute('/api/gamfix/staff/request-info', 'request info', { p_message: message }, complaintId)
 }
 
 export async function officerSetStatus(
@@ -104,8 +114,9 @@ export async function officerSetStatus(
     citizenMessage = requireNote(status === 'resolved' ? 'Resolution note' : 'Progress note')
     if (!citizenMessage) return false
   }
-  return callOfficerRpc(
-    'fn_officer_set_status',
+  return callStaffRoute(
+    '/api/gamfix/staff/status',
+    'update the status',
     { p_status: status, p_citizen_message: citizenMessage },
     complaintId,
   )
@@ -114,7 +125,7 @@ export async function officerSetStatus(
 export async function officerAttachProof(complaintId: string): Promise<boolean> {
   const url = window.prompt('Paste the public URL of the resolution proof photo:')
   if (!url) return false
-  return callOfficerRpc('fn_officer_attach_proof', { p_photo_url: url.trim() }, complaintId)
+  return callStaffRoute('/api/gamfix/staff/proof', 'attach the proof photo', { p_photo_url: url.trim() }, complaintId)
 }
 
 export async function officerForward(
@@ -135,8 +146,9 @@ export async function officerForward(
   }
   const reason = requireNote('Forward')
   if (!reason) return false
-  return callOfficerRpc(
-    'fn_officer_forward',
+  return callStaffRoute(
+    '/api/gamfix/staff/forward',
+    'forward the report',
     { p_institution_id: target.id, p_reason: reason },
     complaintId,
   )

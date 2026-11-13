@@ -35,7 +35,7 @@ import {
 import { SignOutDialog } from '@/components/ConfirmDialogs'
 import PageTransition from '@/components/PageTransition'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { pbApi, getProfile, STAFF_DASHBOARD_URL } from '@/lib/pocketbase'
+import { pb, gamfix, getProfile, STAFF_DASHBOARD_URL } from '@/lib/pocketbase'
 import GamFixMark from '@/components/GamFixMark'
 import { toast } from 'sonner'
 import gamfixLogo from '@/assets/gamfix-logo.png'
@@ -78,11 +78,11 @@ export default function AppShell() {
   const [gateRetry, setGateRetry] = useState(0)
 
   const isFocusMode = location.pathname === '/report'
-  const email = session?.user?.email ?? null
+  const email = session?.email ?? null
   const phoneGate = sessionLoading
     ? 'checking'
-    : session?.user?.id
-      ? gateResult.userId === session.user.id ? gateResult.status : 'checking'
+    : session?.id
+      ? gateResult.userId === session.id ? gateResult.status : 'checking'
       : 'ready'
 
   // Every citizen must complete the full funnel before using the app, no
@@ -91,10 +91,10 @@ export default function AppShell() {
   // verified email → full name → verified phone. Checked on each shell
   // entry, including a browser refresh.
   useEffect(() => {
-    if (sessionLoading || !session?.user?.id) return
+    if (sessionLoading || !session?.id) return
     let cancelled = false
-    const userId = session.user.id
-    getProfile(session.user.id).then((profile) => {
+    const userId = session.id
+    getProfile(session.id).then((profile) => {
       if (cancelled) return
       if (!profile) {
         setGateResult({ userId, status: 'unavailable' })
@@ -124,18 +124,17 @@ export default function AppShell() {
     return () => {
       cancelled = true
     }
-  }, [session?.user?.id, sessionLoading, gateRetry, navigate])
+  }, [session?.id, sessionLoading, gateRetry, navigate])
 
   // A signed-in staff member or the owner is routed by the server-side
   // allowlist to the same /dash entry; transient API errors do not redirect.
   useEffect(() => {
-    if (!session?.user?.id) return
+    if (!session?.id) return
     let cancelled = false
     void (async () => {
       try {
-        const { data, error } = await pbApi.rpc('fn_dashboard_access')
-        if (cancelled || error) return
-        const access = data as { ok?: boolean; role?: string | null } | null
+        const access = await gamfix<{ ok?: boolean; role?: string | null }>('/api/gamfix/access')
+        if (cancelled) return
         if (access?.ok && (access.role === 'officer' || access.role === 'admin')) {
           window.location.replace(STAFF_DASHBOARD_URL)
         }
@@ -146,7 +145,7 @@ export default function AppShell() {
     return () => {
       cancelled = true
     }
-  }, [session?.user?.id])
+  }, [session?.id])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -171,7 +170,8 @@ export default function AppShell() {
               <button
                 type="button"
                 onClick={() => {
-                  pbApi.auth.signOut().then(() => navigate('/login', { replace: true }))
+                  pb.authStore.clear()
+                  navigate('/login', { replace: true })
                 }}
                 className="mt-3 w-full text-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
@@ -190,12 +190,12 @@ export default function AppShell() {
 
   async function signOut() {
     setSigningOut(true)
-    const { error } = await pbApi.auth.signOut()
-    setSigningOut(false)
-    setSignOutOpen(false)
-    if (error) {
-      toast.error('Could not sign out. Try again.')
-      return
+    try {
+      // PocketBase has no logout endpoint: clearing the local authStore IS sign-out.
+      pb.authStore.clear()
+    } finally {
+      setSigningOut(false)
+      setSignOutOpen(false)
     }
     toast.success('Signed out')
     navigate('/login', { replace: true })

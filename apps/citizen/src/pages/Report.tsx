@@ -56,7 +56,7 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { DiscardReportDialog, SubmitReportDialog } from '@/components/ConfirmDialogs'
 import { rememberTracking } from '@/pages/MyReports'
-import { handleAuthExpired, isAuthError, isNetworkError, pbApi } from '@/lib/pocketbase'
+import { pb, gamfix, handleAuthExpired, isAuthError, isNetworkError } from '@/lib/pocketbase'
 import {
   COUNCIL_AREAS,
   councilForLatLng,
@@ -230,16 +230,16 @@ export default function Report() {
   }, [])
 
   async function fetchCategories(): Promise<CategoryInfo[]> {
-    const { data, error } = await pbApi
-      .from('categories')
-      .select('id, slug, name, default_institution_id, is_sensitive, is_emergency, deadline_hours')
-      .order('name')
-    if (error || !data) {
+    try {
+      const items = await pb.collection('categories').getFullList<CategoryInfo>({
+        sort: 'name',
+      })
+      return items
+    } catch (error) {
       toast.error('Could not load the problem list. Check your connection and try again.')
-      console.error('categories fetch failed:', error?.message)
+      console.error('categories fetch failed:', error)
       return []
     }
-    return data as unknown as CategoryInfo[]
   }
 
   const canNext = useMemo(() => {
@@ -345,12 +345,13 @@ export default function Report() {
     setSubmitting(true)
     try {
       if (photoFile) {
-        const { data: accessData, error: accessError } = await pbApi.rpc('fn_dashboard_access')
-        if (accessError) {
+        let access: { ok?: boolean; role?: string | null } | null = null
+        try {
+          access = await gamfix('/api/gamfix/access')
+        } catch {
           toast.error('We could not verify your citizen account. Please try again.')
           return
         }
-        const access = accessData as { ok?: boolean; role?: string | null } | null
         if (!access?.ok || access.role !== 'citizen') {
           toast.error('Sign in with your citizen account before sending a report with a photo. App and dashboard tabs in this browser share one sign-in.')
           return
@@ -392,24 +393,25 @@ export default function Report() {
       }
       if (location.landmark.trim()) params.p_ward = location.landmark.trim()
 
-      const { data, error } = await pbApi.rpc('submit_complaint', params)
-      if (error || !data) {
-        console.error('submit_complaint failed:', error?.message)
-        if (isAuthError(error)) {
+      let res: SubmitResult
+      try {
+        res = await gamfix<SubmitResult>('/api/gamfix/complaints', params)
+      } catch (submitError) {
+        console.error('submit_complaint failed:', submitError)
+        if (isAuthError(submitError)) {
           // Expired session: clear it so the next navigation asks for login.
           toast.error('Your session has expired. Please sign in again.')
           await handleAuthExpired()
           return
         }
         toast.error(
-          isNetworkError(error)
+          isNetworkError(submitError)
             ? "Network problem — the report may not have been sent. Check your connection and try Send again; you won't get duplicates."
-            : friendlySubmitError(error),
+            : friendlySubmitError(submitError as { message?: string } | null),
         )
         return
       }
 
-      const res = data as SubmitResult
       if (photoFile) {
         const failureCode = await uploadAndAttachPhoto(res.complaint_id, photoFile)
         setPhotoUploadFailed(!!failureCode)
@@ -435,53 +437,33 @@ export default function Report() {
   }
 
   async function uploadAndAttachPhoto(complaintId: string, file: File): Promise<string | null> {
-    const body = new FormData()
-    body.set('complaint_id', complaintId)
-    body.set('photo', file, file.name || 'report-photo')
     const normalizeCode = (value: string | null | undefined) =>
       value?.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 48) || 'upload_failed'
     try {
-      const { data, error } = await pbApi.functions.invoke<{ ok?: boolean; error?: string }>(
-        'citizen-photo-upload',
-        { body },
-      )
-      if (error) {
-        let code: string | null = null
-        if (error.context instanceof Response) {
-          const payload = await error.context.clone().json().catch(() => null) as { error?: unknown } | null
-          if (payload && typeof payload.error === 'string') code = payload.error
-        }
-        const failureCode = normalizeCode(
-          code ?? (error.name === 'FunctionsFetchError' ? 'photo_service_unreachable' : error.name),
-        )
-        console.error('citizen photo upload failed:', { name: error.name, code: failureCode })
-        return failureCode
-      }
-      if (data?.ok !== true) {
-        const failureCode = normalizeCode(data?.error ?? 'invalid_response')
-        console.error('citizen photo upload failed:', failureCode)
-        return failureCode
-      }
+      // The photo is a PocketBase file field on the complaints record: the
+      // SDK uploads it as multipart form data and the collection rules keep
+      // it owner-only with type/size limits enforced server-side.
+      await pb.collection('complaints').update(complaintId, { photos: file })
       return null
     } catch (error) {
-      const failureCode = normalizeCode(error instanceof Error ? error.name : 'request_failed')
-      console.error('citizen photo upload request failed:', failureCode)
+      const status = (error as { status?: number }).status
+      const failureCode = isNetworkError(error)
+        ? 'photo_service_unreachable'
+        : normalizeCode(status != null ? `photo_upload_${status}` : error instanceof Error ? error.name : null)
+      console.error('citizen photo upload failed:', { code: failureCode, error })
       return failureCode
     }
   }
 
   async function retryPhotoAttachment() {
     if (!result || !photoFile || retryingPhotoUpload) return
-    let accessData: unknown
+    let access: { ok?: boolean; role?: string | null } | null = null
     try {
-      const accessResult = await pbApi.rpc('fn_dashboard_access')
-      if (accessResult.error) throw accessResult.error
-      accessData = accessResult.data
+      access = await gamfix('/api/gamfix/access')
     } catch {
       toast.error('We could not verify your citizen account. Please try again.')
       return
     }
-    const access = accessData as { ok?: boolean; role?: string | null } | null
     if (!access?.ok || access.role !== 'citizen') {
       toast.error('Sign in with your citizen account before retrying. App and dashboard tabs in this browser share one sign-in.')
       return

@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { pbApi, routeByRole, type User } from '@/lib/pocketbase'
+import { pb, currentUser, routeByRole } from '@/lib/pocketbase'
 import { friendlyAuthError } from '@/lib/authErrors'
 
 export default function Onboarding() {
@@ -38,22 +38,16 @@ export default function Onboarding() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const { data } = await pbApi.auth.getSession()
-      const user = data.session?.user as User | undefined
-      if (!data.session || !user) {
+      const user = currentUser()
+      if (!user) {
         navigate('/login', { replace: true })
         return
       }
       const role = await routeByRole() // staff are redirected to /dash inside
       if (cancelled) return
       if (role !== 'citizen' && role !== null) return // navigation happened
-      // Prefill: the `name` field PocketBase copies from the Google profile,
-      // then anything the shim stored in user_metadata.
-      const meta = (user.user_metadata ?? {}) as Record<string, unknown>
-      const googleName =
-        String((user as unknown as Record<string, unknown>).name ?? '').trim() ||
-        String(meta.full_name ?? '').trim() ||
-        String(meta.name ?? '').trim()
+      // Prefill: the `name` field PocketBase copies from the Google profile.
+      const googleName = String(user.name ?? '').trim()
       if (String(user.full_name ?? '').trim()) {
         // Nothing to confirm here — continue the funnel.
         navigate(user.phone_verified ? '/home' : '/verify/phone', { replace: true })
@@ -80,10 +74,12 @@ export default function Onboarding() {
       return
     }
     setBusy(true)
-    const { error: err } = await pbApi.auth.updateUser({
-      data: { full_name: name.trim() },
-    })
-    if (err) {
+    try {
+      const uid = currentUser()?.id
+      if (!uid) throw new Error('Not signed in')
+      const record = await pb.collection('users').update(uid, { full_name: name.trim() })
+      pb.authStore.save(pb.authStore.token, record)
+    } catch (err) {
       setBusy(false)
       setError(friendlyAuthError(err))
       return
@@ -135,7 +131,7 @@ export default function Onboarding() {
             <button
               type="button"
               onClick={async () => {
-                await pbApi.auth.signOut()
+                pb.authStore.clear()
                 navigate('/login', { replace: true })
               }}
               className="font-medium text-primary underline underline-offset-2"

@@ -1,10 +1,10 @@
 /**
  * Shared domain helpers for the citizen app: institutions, categories,
- * council areas and status metadata. All live data comes from the real
- * backend (api.pocketsoftware.dev) through the shared pbApi client.
+ * council areas and status metadata. All live data comes from PocketBase
+ * through the real JS SDK client.
  */
 import { toast } from 'sonner'
-import { pbApi } from '@/lib/pocketbase'
+import { pb } from '@/lib/pocketbase'
 
 /** The five branded services plus the central desk that handles sensitive reports. */
 export type InstitutionCode = 'KMC' | 'NAWEC' | 'NRA' | 'NEA' | 'POLICE' | 'CENTRAL'
@@ -64,13 +64,33 @@ export const INSTITUTION_ORDER: InstitutionCode[] = ['KMC', 'NAWEC', 'NRA', 'NEA
  * dropped by `public_visible=eq.true`.
  */
 export async function fetchInstitutions(): Promise<InstitutionInfo[]> {
-  const { data, error } = await pbApi
-    .from('institutions')
-    .select('id, code, name, type, logo_url')
-    .in('code', [...INSTITUTION_ORDER, 'CENTRAL'])
+  const codes = [...INSTITUTION_ORDER, 'CENTRAL']
+  try {
+    const rows = await pb.collection('institutions').getFullList({
+      filter: codes.map((code) => pb.filter('code = {:code}', { code })).join(' || '),
+    })
+    const data = rows as unknown as Array<{ id: string; code: string; name: string; type: string; logo_url: string | null }>
 
-  if (error || !data) {
-    console.error('institutions fetch failed:', error?.message)
+    const byCode = new Map<string, InstitutionInfo>()
+    for (const row of data) {
+      const code = row.code as InstitutionCode
+      if (!BRAND[code]) continue
+      byCode.set(code, {
+        id: row.id,
+        code,
+        name: row.name,
+        type: row.type,
+        ...BRAND[code],
+        logo: row.logo_url?.trim() || BRAND[code].logo,
+      })
+    }
+    const ordered: InstitutionInfo[] = INSTITUTION_ORDER.map((c) => byCode.get(c)).filter(
+      (v): v is InstitutionInfo => !!v,
+    )
+    if (byCode.has('CENTRAL')) ordered.push(byCode.get('CENTRAL')!)
+    return ordered
+  } catch (error) {
+    console.error('institutions fetch failed:', error)
     // Don't fail silently: with fallback ids ('') submissions would break, so
     // tell the person the service list couldn't be loaded from the server.
     toast.warning("Couldn't load the service list. Showing offline placeholders. Check your connection.")
@@ -85,25 +105,6 @@ export async function fetchInstitutions(): Promise<InstitutionInfo[]> {
       { id: '', code: 'CENTRAL', name: FALLBACK_NAMES.CENTRAL, type: 'central', ...BRAND.CENTRAL },
     ]
   }
-
-  const byCode = new Map<string, InstitutionInfo>()
-  for (const row of data as unknown as Array<{ id: string; code: string; name: string; type: string; logo_url: string | null }>) {
-    const code = row.code as InstitutionCode
-    if (!BRAND[code]) continue
-    byCode.set(code, {
-      id: row.id,
-      code,
-      name: row.name,
-      type: row.type,
-      ...BRAND[code],
-      logo: row.logo_url?.trim() || BRAND[code].logo,
-    })
-  }
-  const ordered: InstitutionInfo[] = INSTITUTION_ORDER.map((c) => byCode.get(c)).filter(
-    (v): v is InstitutionInfo => !!v,
-  )
-  if (byCode.has('CENTRAL')) ordered.push(byCode.get('CENTRAL')!)
-  return ordered
 }
 
 /** A reportable problem category, as served by the categories table. */

@@ -1,11 +1,11 @@
 /**
  * friendlyAuthError — one map from raw auth failures to plain sentences.
  *
- * Supabase GoTrue surfaces errors as AuthApiError objects with a `code`,
- * `status` and human-hostile `message` ("Invalid login credentials",
- * "over_email_send_rate_limit", "Failed to fetch"). Every auth catch block
- * in this app routes through here so a person always sees what happened
- * and what to do next — never jargon, never blame.
+ * PocketBase surfaces auth failures as ClientResponseError with a `status`
+ * and a human message ("Failed to authenticate.", "Please verify your email
+ * address first."). Every auth catch block in this app routes through here
+ * so a person always sees what happened and what to do next — never jargon,
+ * never blame.
  */
 const NETWORK_MESSAGE =
   'We could not reach the server. Check your internet connection and try again.'
@@ -17,7 +17,7 @@ const FALLBACK_MESSAGE = 'Something went wrong. Please try again.'
 
 /** True for connection failures: fetch threw, DNS failed, or it timed out. */
 function isNetworkError(err: { name?: string; message?: string; code?: string }): boolean {
-  if (err.name === 'AuthRetryableFetchError' || err.name === 'FetchError') return true
+  if (err.name === 'TimeoutError') return true
   const msg = (err.message ?? '').toLowerCase()
   return (
     msg.includes('failed to fetch') ||
@@ -69,15 +69,20 @@ export function friendlyAuthError(err: unknown): string {
   // 1. Connection failures first — never surface "Failed to fetch".
   if (isNetworkError(e)) return NETWORK_MESSAGE
 
-  // 2. Known GoTrue error codes and messages, most specific first.
+  // 2. Known PocketBase auth messages, most specific first.
   if (
-    code === 'invalid_credentials' ||
-    m.includes('invalid login credentials')
+    m.includes('failed to authenticate') ||
+    m.includes('invalid login credentials') ||
+    m.includes('invalid credentials')
   ) {
     return 'Wrong email or password. Try again or reset your password.'
   }
-  if (code === 'email_not_confirmed' || m.includes('email not confirmed')) {
-    return 'Please verify your email first — we sent you a code.'
+  if (
+    m.includes('verify your email') ||
+    m.includes('email not confirmed') ||
+    m.includes('not verified')
+  ) {
+    return 'Please verify your email first — we sent you a verification link.'
   }
   if (
     code === 'user_already_registered' ||

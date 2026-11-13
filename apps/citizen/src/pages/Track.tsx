@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { handleAuthExpired, isAuthError, isNetworkError, pbApi } from '@/lib/pocketbase'
+import { gamfix, handleAuthExpired, isAuthError, isNetworkError } from '@/lib/pocketbase'
 import { statusMeta } from '@/lib/gamciv'
 import { useSession } from '@/hooks/useSession'
 
@@ -98,18 +98,18 @@ export default function Track() {
     setCanConfirm(false)
     setCitizenActionError(null)
     try {
-      const { data, error } = await pbApi.rpc('track_complaint', {
-        p_tracking_no: raw,
-      })
-      if (error) {
-        console.error('track_complaint failed:', error.message)
-        if (isAuthError(error)) {
+      let data: TrackResult | null
+      try {
+        data = await gamfix<TrackResult>('/api/gamfix/track', { p_tracking_no: raw })
+      } catch (trackError) {
+        console.error('track_complaint failed:', trackError)
+        if (isAuthError(trackError)) {
           // Expired session: clear it so the next navigation asks for login.
           toast.error('Your session has expired. Please sign in again.')
           await handleAuthExpired()
           return
         }
-        if (isNetworkError(error)) {
+        if (isNetworkError(trackError)) {
           toast.error('Network problem. Check your connection and try again.')
         } else {
           setNotFound(true)
@@ -121,7 +121,7 @@ export default function Track() {
         setResult(null)
         return
       }
-      setResult(data as unknown as TrackResult)
+      setResult(data)
       setSearched(true)
       setParams({ ref: raw }, { replace: true })
     } catch (err) {
@@ -139,9 +139,11 @@ export default function Track() {
     }
     setRefreshingStatus(true)
     try {
-      const { data, error } = await pbApi.rpc('track_complaint', { p_tracking_no: ref })
-      if (error) {
-        if (isAuthError(error)) {
+      let data: TrackResult | null
+      try {
+        data = await gamfix<TrackResult>('/api/gamfix/track', { p_tracking_no: ref })
+      } catch (trackError) {
+        if (isAuthError(trackError)) {
           if (!quiet) toast.error('Your session has expired. Please sign in again.')
           await handleAuthExpired()
           return
@@ -170,19 +172,19 @@ export default function Track() {
     let active = true
     setCanConfirm(false)
     setCitizenActionError(null)
-    if (!session?.user.id || !result?.tracking_no || !['citizen_confirmation', 'resolved'].includes(result.status ?? '')) {
+    if (!session?.id || !result?.tracking_no || !['citizen_confirmation', 'resolved'].includes(result.status ?? '')) {
       return () => { active = false }
     }
     void (async () => {
       try {
-        const { data, error } = await pbApi.rpc('fn_can_confirm_report', { p_tracking_no: result.tracking_no })
-        if (active) setCanConfirm(!error && data === true)
+        const data = await gamfix<unknown>('/api/gamfix/can-confirm', { p_tracking_no: result.tracking_no })
+        if (active) setCanConfirm(data === true)
       } catch {
         if (active) setCanConfirm(false)
       }
     })()
     return () => { active = false }
-  }, [session?.user.id, result?.tracking_no, result?.status])
+  }, [session?.id, result?.tracking_no, result?.status])
 
   async function respondToFix(action: 'confirm' | 'reopen') {
     if (!result || citizenAction) return
@@ -193,14 +195,14 @@ export default function Track() {
     setCitizenAction(action)
     setCitizenActionError(null)
     try {
-      const { data, error } = action === 'confirm'
-        ? await pbApi.rpc('confirm_complaint', { p_tracking_no: result.tracking_no, p_phone: null })
-        : await pbApi.rpc('reopen_complaint', {
+      const data = action === 'confirm'
+        ? await gamfix<unknown>('/api/gamfix/confirm', { p_tracking_no: result.tracking_no, p_phone: null })
+        : await gamfix<unknown>('/api/gamfix/reopen', {
             p_tracking_no: result.tracking_no,
             p_reason: reopenReason.trim(),
             p_phone: null,
           })
-      if (error || data !== true) {
+      if (data !== true) {
         setCitizenActionError(action === 'confirm'
           ? 'We could not close this report. Refresh and try again, or contact the handling service.'
           : 'We could not reopen this report. Refresh and try again, or contact the handling service.')

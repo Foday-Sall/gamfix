@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { pbApi } from '@/lib/pocketbase'
+import { pb } from '@/lib/pocketbase'
 import { SignOutDialog } from '@/components/ConfirmDialogs'
 
 export const APP_VERSION = '1.1.0'
@@ -53,17 +53,15 @@ export default function Profile() {
     let cancelled = false
     const uid = session?.user.id
     if (!uid) return
-    pbApi
-      .from('profiles')
-      .select('full_name, avatar_url')
-      .eq('user_id', uid)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled || !data) return
-        setFullName(data.full_name ?? '')
-        setSavedName(data.full_name)
-        setAvatarUrl(data.avatar_url)
+    pb.collection('users')
+      .getOne(uid)
+      .then((record) => {
+        if (cancelled) return
+        setFullName(record.full_name ?? '')
+        setSavedName(record.full_name ?? '')
+        setAvatarUrl(record.avatar ? pb.files.getURL(record, String(record.avatar)) : null)
       })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -71,12 +69,12 @@ export default function Profile() {
 
   async function signOut() {
     setSigningOut(true)
-    const { error } = await pbApi.auth.signOut()
-    setSigningOut(false)
-    setConfirmOpen(false)
-    if (error) {
-      toast.error('Could not sign out. Try again.')
-      return
+    try {
+      // PocketBase has no logout endpoint: clearing the local authStore IS sign-out.
+      pb.authStore.clear()
+    } finally {
+      setSigningOut(false)
+      setConfirmOpen(false)
     }
     toast.success('Signed out')
     navigate('/login', { replace: true })
@@ -92,19 +90,17 @@ export default function Profile() {
     }
     setSavingName(true)
     setMsg(null)
-    const { error } = await pbApi
-      .from('profiles')
-      .update({ full_name: trimmed })
-      .eq('user_id', uid)
-    setSavingName(false)
-    if (error) {
+    try {
+      const record = await pb.collection('users').update(uid, { full_name: trimmed })
+      // Refresh the cached auth record so other pages show the new name right away.
+      pb.authStore.save(pb.authStore.token, record)
+      setSavedName(trimmed)
+      setMsg({ kind: 'ok', text: 'Name updated.' })
+    } catch {
       setMsg({ kind: 'err', text: 'Could not save your name. Try again.' })
-      return
+    } finally {
+      setSavingName(false)
     }
-    setSavedName(trimmed)
-    // Refresh auth metadata so other pages show the new name right away.
-    await pbApi.auth.updateUser({ data: { full_name: trimmed } })
-    setMsg({ kind: 'ok', text: 'Name updated.' })
   }
 
   async function onPickAvatar(event: React.ChangeEvent<HTMLInputElement>) {
@@ -124,20 +120,12 @@ export default function Profile() {
     setMsg(null)
     try {
       const uid = session.user.id
-      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-      const path = `${uid}/${Date.now()}.${ext}`
-      const { error } = await pbApi.storage
-        .from('avatars')
-        .upload(path, file, { cacheControl: '3600', upsert: false })
-      if (error) throw error
-      const { data } = pbApi.storage.from('avatars').getPublicUrl(path)
-      // Save URL to the profile row (owner-only, guarded by RLS).
-      const { error: dbErr } = await pbApi
-        .from('profiles')
-        .update({ avatar_url: data.publicUrl })
-        .eq('user_id', uid)
-      if (dbErr) throw dbErr
-      setAvatarUrl(data.publicUrl)
+      // The avatar is a PocketBase file field on the users record; the SDK
+      // uploads it via multipart form data and serves it through pb.files.
+      const record = await pb.collection('users').update(uid, { avatar: file })
+      const url = record.avatar ? pb.files.getURL(record, String(record.avatar)) : null
+      pb.authStore.save(pb.authStore.token, record)
+      setAvatarUrl(url)
       setMsg({ kind: 'ok', text: 'Photo updated.' })
     } catch {
       setMsg({ kind: 'err', text: 'Could not upload the photo. Try again.' })

@@ -17,7 +17,7 @@ export default function HomeGate() {
 
   useEffect(() => {
     if (loading) return
-    const user = session?.user
+    const user = session
     if (!user) {
       setInstitute(false)
       return
@@ -36,7 +36,7 @@ export default function HomeGate() {
     return () => {
       cancelled = true
     }
-  }, [session?.user?.id, loading]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session?.id, loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || institute === null) {
     // Citizen home already renders skeletons while its own session resolves.

@@ -1,157 +1,200 @@
 /**
- * VerifyEmail — 6-digit email confirmation screen.
+ * VerifyEmail — PocketBase's native email verification, link-based.
  *
- * The server signs confirmation links, but devices that open the app without
- * that session can verify with the one-time code instead. Signed-in users who
- * still show `email_confirmed_at === null` are routed here after login rather
- * than seeing home content.
+ * PocketBase's default verification email carries a signed token link that
+ * lands here as /verify/email?token=…. Confirming it calls the SDK's
+ * confirmVerification — no custom email hooks anywhere. Users who reach this
+ * screen from inside the app (fresh signup, or a sign-in the server rejected
+ * because the email is unverified) see a "check your inbox" panel with a
+ * native requestVerification resend.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { MailCheck } from 'lucide-react'
+import { MailCheck, CheckCircle2, CircleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getProfile, pbApi } from '@/lib/pocketbase'
+import { pb, currentUser, getProfile, type User } from '@/lib/pocketbase'
 import { friendlyAuthError } from '@/lib/authErrors'
 
-const OTP_LENGTH = 6
+/** PocketBase enforces a 2-minute cooldown between verification emails. */
+const RESEND_COOLDOWN = 120
+
+type HandoffState = { email?: string; sendNow?: boolean; justSent?: boolean } | null
+type Panel = 'inbox' | 'verifying' | 'verified' | 'link-error'
 
 export default function VerifyEmail() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [email, setEmail] = useState('')
-  const [token, setToken] = useState('')
+  const handoff = (location.state ?? null) as HandoffState
+  const urlToken = new URLSearchParams(window.location.search).get('token') ?? ''
+
+  const [email, setEmail] = useState(handoff?.email ?? '')
+  const [panel, setPanel] = useState<Panel>(urlToken ? 'verifying' : 'inbox')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [resendIn, setResendIn] = useState(60)
-  const [resent, setResent] = useState(false)
-  /** Guards the one-shot auto-send (StrictMode double-invokes effects in dev). */
+  const [resendIn, setResendIn] = useState(handoff?.justSent ? RESEND_COOLDOWN : 0)
   const autoSendRef = useRef(false)
 
   useEffect(() => {
     document.title = 'Verify email · GamFix'
   }, [])
 
-  // Pre-fill: first from the signup/login hand-off (location state), then
-  // from the session for signed-in users who still need confirmation.
+  // Signed-in users who land here already have their address on the record.
   useEffect(() => {
-    const stateEmail = (location.state as { email?: string } | null)?.email
-    if (stateEmail) {
-      setEmail(stateEmail)
+    if (email || handoff?.email) return
+    const user = currentUser()
+    if (user?.email) setEmail(user.email)
+  }, [email, handoff])
+
+  /** Continue the funnel with a fresh server-side record. */
+  async function continueAfterVerification(user: User | null) {
+    let fresh: Awaited<ReturnType<typeof getProfile>> = null
+    if (user) {
+      try {
+        const auth = await pb.collection('users').authRefresh()
+        pb.authStore.save(pb.authStore.token, auth.record)
+      } catch {
+        pb.authStore.clear()
+      }
+      fresh = await getProfile(user.id)
+    }
+    if (!fresh) {
+      navigate('/login', { replace: true })
       return
     }
-    pbApi.auth.getSession().then(({ data }) => {
-      const mail = data.session?.user?.email
-      if (mail) setEmail(mail)
-    })
-  }, [location.state])
+    if (!String(fresh.full_name ?? '').trim()) {
+      navigate('/onboarding', { replace: true })
+    } else if (fresh.phone_verified !== true) {
+      navigate('/verify/phone', { replace: true })
+    } else {
+      navigate('/home', { replace: true })
+    }
+  }
 
-  // Verified users don't belong here. Whatever sent them (a stale link, a
-  // manual URL, the old flow's assumptions) — continue the funnel instead.
-  // The fresh profile is read server-side on purpose: the cached auth record
-  // still says verified=false if the email was confirmed on another device
-  // (or by the OAuth provider), which used to trap users on this screen.
+  // A token in the URL comes from PocketBase's default verification email —
+  // confirm it with the SDK right away.
   useEffect(() => {
-    let cancelled = false
+    if (!urlToken) return
     void (async () => {
-      const { data } = await pbApi.auth.getSession()
-      const user = data.session?.user
-      if (cancelled || !user) return
-      // Do NOT trust the cached record's verified flag here — it stays false
-      // when the email was confirmed on another device or by the OAuth
-      // provider, which used to trap users on this screen. The fresh server
-      // profile is the source of truth.
-      const profile = await getProfile(user.id)
-      if (cancelled || !profile || !profile.email_verified) return
-      if (!String(profile.full_name ?? '').trim()) {
-        navigate('/onboarding', { replace: true })
-      } else if (profile.phone_verified !== true) {
-        navigate('/verify/phone', { replace: true })
-      } else {
-        navigate('/home', { replace: true })
+      try {
+        await pb.collection('users').confirmVerification(urlToken)
+        setPanel('verified')
+        await continueAfterVerification(currentUser())
+      } catch {
+        setPanel('link-error')
+        setError('This verification link is no longer valid — it may have expired or already been used.')
       }
     })()
-    return () => {
-      cancelled = true
-    }
-  }, [navigate])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlToken])
 
   /**
-   * THE missing first email: the screen used to say "we sent you a code"
-   * while nothing had actually been sent at signup — the user stared at the
-   * form until they discovered the resend button 60 seconds later. When the
-   * previous screen hands off with `sendNow`, fire the send right here,
-   * once, and start the resend cooldown from it.
+   * The first email goes out here when the hand-off asks for it (e.g. a
+   * sign-in that the server rejected because the account is unverified).
+   * Fresh signups skip this: Auth.tsx already requested the email.
    */
   useEffect(() => {
-    const state = location.state as { email?: string; sendNow?: boolean } | null
-    if (!state?.sendNow || autoSendRef.current) return
+    if (!handoff?.sendNow || autoSendRef.current) return
     autoSendRef.current = true
     void (async () => {
-      const { error: err } = await pbApi.auth.resend({
-        type: 'signup',
-        email: state.email ?? '',
-      })
-      if (err && !/already confirmed/i.test(err.message ?? '')) {
+      try {
+        await pb.collection('users').requestVerification(email)
+        setResendIn(RESEND_COOLDOWN)
+      } catch (err) {
         setError(friendlyAuthError(err))
-        setResendIn(0) // let them retry immediately from the button
-      } else {
-        setResent(true)
-        setResendIn(60)
       }
     })()
-  }, [location.state])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoff])
 
-  // 60s resend cooldown.
+  // Resend cooldown, mirroring PocketBase's own 2-minute limit.
   useEffect(() => {
     if (resendIn <= 0) return
     const timer = setTimeout(() => setResendIn((s) => s - 1), 1000)
     return () => clearTimeout(timer)
   }, [resendIn])
 
-  async function resendCode() {
+  async function resendEmail() {
     setError(null)
     setBusy(true)
-    const { error: err } = await pbApi.auth.resend({
-      type: 'signup',
-      email: email.trim(),
-    })
-    setBusy(false)
-    if (err) {
-      if (err.message.toLowerCase().includes('already confirmed')) {
-        // Already verified: let the user continue to sign in.
-        navigate('/login', { replace: true })
-        return
-      }
+    try {
+      await pb.collection('users').requestVerification(email.trim())
+      setResendIn(RESEND_COOLDOWN)
+    } catch (err) {
       setError(friendlyAuthError(err))
-      return
+    } finally {
+      setBusy(false)
     }
-    setResent(true)
-    setResendIn(60)
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    if (token.trim().length !== OTP_LENGTH) {
-      setError('Enter the ' + OTP_LENGTH + '-digit code from your email.')
-      return
-    }
-    setBusy(true)
-    const { error } = await pbApi.auth.verifyOtp({
-      email: email.trim(),
-      token: token.trim(),
-      type: 'email',
-    })
-    setBusy(false)
-    if (error) {
-      setError(friendlyAuthError(error))
-      return
-    }
-    // Email verified. Next step: verify the phone with the WhatsApp code.
-    navigate('/verify/phone', { replace: true })
+  if (panel === 'verifying') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md shadow-sm">
+          <CardContent className="pt-6 text-center text-muted-foreground">
+            Confirming your email…
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (panel === 'verified') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md shadow-sm">
+          <CardContent className="pt-6 text-center">
+            <CheckCircle2 className="mx-auto h-10 w-10 text-primary" aria-hidden="true" />
+            <CardTitle className="mt-3 font-display text-xl font-bold">Email verified</CardTitle>
+            <CardDescription className="mt-2">
+              Thanks — your email is confirmed. Taking you to your account…
+            </CardDescription>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (panel === 'link-error') {
+    const user = currentUser()
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md shadow-sm">
+          <CardHeader className="items-center text-center">
+            <CircleAlert className="mx-auto h-10 w-10 text-destructive" aria-hidden="true" />
+            <CardTitle className="font-display text-xl font-bold">Link no longer valid</CardTitle>
+            <CardDescription>{error}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {user?.email ? (
+              <Button
+                onClick={async () => {
+                  setBusy(true)
+                  try {
+                    await pb.collection('users').requestVerification(user.email)
+                    setPanel('inbox')
+                    setResendIn(RESEND_COOLDOWN)
+                  } catch (err) {
+                    setError(friendlyAuthError(err))
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
+                disabled={busy}
+                className="w-full"
+              >
+                Send a new verification link
+              </Button>
+            ) : null}
+            <Button asChild variant="outline" className="w-full">
+              <Link to="/login">Back to sign in</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -161,11 +204,12 @@ export default function VerifyEmail() {
           <MailCheck className="mx-auto h-10 w-10 text-primary" aria-hidden="true" />
           <CardTitle className="font-display text-xl font-bold">Verify your email</CardTitle>
           <CardDescription>
-            Enter the {OTP_LENGTH}-digit code we sent to {email || 'your email'}.
+            We sent a verification link to {email || 'your email'}. Open your inbox and click
+            “Verify” to activate your account.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={submit} className="space-y-4">
+          {!currentUser() && (
             <div className="space-y-2">
               <Label htmlFor="verify-email">Email</Label>
               <Input
@@ -178,36 +222,19 @@ export default function VerifyEmail() {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="verify-token">6-digit code</Label>
-              <Input
-                id="verify-token"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={OTP_LENGTH}
-                value={token}
-                onChange={(e) => setToken(e.target.value.replace(/\D/g, ''))}
-                placeholder="······"
-                className="text-center font-mono text-lg tracking-[0.5em]"
-                required
-              />
-            </div>
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <Button type="submit" disabled={busy} className="w-full">
-              {busy ? 'Verifying…' : 'Verify email'}
-            </Button>
-            <button
-              type="button"
-              onClick={resendCode}
-              disabled={busy || resendIn > 0}
-              className="w-full text-center text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
-            >
-              {resendIn > 0 ? `Resend code available in ${resendIn}s` : 'Resend code'}
-            </button>
-            {resent ? (
-              <p className="text-center text-xs text-muted-foreground">A new code was sent.</p>
-            ) : null}
-          </form>
+          )}
+          {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
+          <Button
+            type="button"
+            onClick={resendEmail}
+            disabled={busy || resendIn > 0 || !email.trim()}
+            className="mt-4 w-full"
+          >
+            {resendIn > 0 ? `Resend email available in ${resendIn}s` : 'Resend verification email'}
+          </Button>
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            No email? Check your spam folder. Gmail can also lag a minute or two.
+          </p>
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Wrong address?{' '}
             <Link to="/signup" className="text-primary underline underline-offset-2">
@@ -220,7 +247,7 @@ export default function VerifyEmail() {
             <button
               type="button"
               onClick={async () => {
-                await pbApi.auth.signOut()
+                pb.authStore.clear()
                 navigate('/login', { replace: true })
               }}
               className="font-medium text-primary underline underline-offset-2"

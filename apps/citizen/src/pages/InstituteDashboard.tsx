@@ -38,10 +38,17 @@ import {
 } from '@/components/ui/chart'
 import { Bar, BarChart, CartesianGrid, Area, AreaChart, XAxis, YAxis, Pie, PieChart, Cell, RadialBar, RadialBarChart, PolarAngleAxis } from 'recharts'
 import { useSession } from '@/hooks/useSession'
-import { pbApi, getProfile } from '@/lib/pocketbase'
+import { pb, getProfile } from '@/lib/pocketbase'
 import { statusMeta } from '@/lib/gamciv'
 import GamFixMark from '@/components/GamFixMark'
 import type { Complaint } from '@/lib/types'
+
+/** The raw complaint record PocketBase returns, before the created_at mapping. */
+type ComplaintRecord = Complaint & {
+  created?: string
+  updated?: string
+  expand?: { categories?: { name?: string } }
+}
 import {
   getInstituteUser,
   officerAccept,
@@ -158,26 +165,26 @@ export default function InstituteDashboard() {
   /** Full load of the institution's complaint feed (newest first). */
   const loadFeed = useCallback(async (institutionId: string) => {
     setLoading(true)
-    const { data, error } = await pbApi
-      .from('complaints')
-      .select(
-        'id, tracking_no, title, description, urgency, status, created_at, updated_at, citizen_name, citizen_phone, resolution_photo_url, institution_id, categories(name)',
-      )
-      .eq('institution_id', institutionId)
-      .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE)
-    if (error) {
-      console.error('institute feed query failed:', error.message)
-      setLoadFailed(true)
-      setRows([])
-    } else {
+    try {
+      const page = await pb.collection('complaints').getList<ComplaintRecord>(1, PAGE_SIZE, {
+        filter: pb.filter('institution_id = {:id}', { id: institutionId }),
+        sort: '-created',
+        expand: 'categories',
+      })
       setLoadFailed(false)
       setRows(
-        ((data as unknown as Array<Complaint & { categories?: { name?: string } | null }> | null) ?? []).map((row) => ({
+        page.items.map((row) => ({
           ...row,
-          category_name: row.categories?.name ?? null,
+          created_at: row.created ?? '',
+          updated_at: row.updated ?? null,
+          category_name:
+            (row.expand?.categories as { name?: string } | undefined)?.name ?? null,
         })),
       )
+    } catch (feedError) {
+      console.error('institute feed query failed:', feedError)
+      setLoadFailed(true)
+      setRows([])
     }
     setLoading(false)
   }, [])
@@ -200,47 +207,29 @@ export default function InstituteDashboard() {
       })
   }, [staff?.institutionId, loadFeed])
 
-  // Realtime: new complaints appear live; status changes refresh in place.
+  // Realtime via the PocketBase SDK: new complaints appear live; status
+  // changes refresh in place. The subscription is scoped to this institution
+  // by the filter and the collection's API rules.
   useEffect(() => {
     const institutionId = staff?.institutionId
     if (!institutionId) return
-    const channel = pbApi
-      .channel(`institute-complaints-${institutionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'complaints',
-          filter: `institution_id=eq.${institutionId}`,
-        },
-        (payload) => {
-          const row = payload.new as Complaint
-          setRows((current) => {
-            if (current.some((c) => c.id === row.id)) return current
-            return [row, ...current].slice(0, PAGE_SIZE)
-          })
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'complaints',
-          filter: `institution_id=eq.${institutionId}`,
-        },
-        (payload) => {
-          const row = payload.new as Complaint
-          setRows((current) => {
-            if (!current.some((c) => c.id === row.id)) return [row, ...current].slice(0, PAGE_SIZE)
-            return current.map((c) => (c.id === row.id ? row : c))
-          })
-        },
-      )
-      .subscribe()
+    const filter = pb.filter('institution_id = {:id}', { id: institutionId })
+    const handle = (row: ComplaintRecord) => {
+      const incoming = { ...row, created_at: row.created ?? '', updated_at: row.updated ?? null }
+      setRows((current) => {
+        if (!current.some((c) => c.id === incoming.id)) {
+          return [incoming, ...current].slice(0, PAGE_SIZE)
+        }
+        return current.map((c) => (c.id === incoming.id ? incoming : c))
+      })
+    }
+    const unsubscribe = pb.collection('complaints').subscribe(filter, (payload) => {
+      if (payload.action === 'create' || payload.action === 'update') {
+        handle(payload.record as unknown as ComplaintRecord)
+      }
+    })
     return () => {
-      void pbApi.removeChannel(channel)
+      void unsubscribe.then((unsub) => unsub())
     }
   }, [staff?.institutionId])
 
@@ -249,14 +238,12 @@ export default function InstituteDashboard() {
     const institutionId = staff?.institutionId
     if (!institutionId) return
     let alive = true
-    pbApi
-      .from('institutions')
-      .select('logo')
-      .eq('id', institutionId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (alive) setInstitutionLogo(data?.logo ?? null)
+    pb.collection('institutions')
+      .getOne(institutionId)
+      .then((record) => {
+        if (alive) setInstitutionLogo((record.logo as string | null) ?? null)
       })
+      .catch(() => {})
     return () => {
       alive = false
     }

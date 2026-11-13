@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getProfile, pb, pbApi } from '@/lib/pocketbase'
+import { currentUser, getProfile, pb } from '@/lib/pocketbase'
 
 const OTP_LENGTH = 6
 
@@ -94,12 +94,12 @@ export default function VerifyPhone() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const { data } = await pbApi.auth.getSession()
-      if (!data.session) {
+      const user = currentUser()
+      if (!user) {
         navigate('/login', { replace: true })
         return
       }
-      const profile = await getProfile(data.session.user.id)
+      const profile = await getProfile(user.id)
       if (cancelled) return
       if (!profile) {
         setError('We could not check your account. Check your connection and try again.')
@@ -300,7 +300,7 @@ export default function VerifyPhone() {
             <button
               type="button"
               onClick={async () => {
-                await pbApi.auth.signOut()
+                pb.authStore.clear()
                 navigate('/login', { replace: true })
               }}
               className="font-medium text-primary underline underline-offset-2"

@@ -17,7 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSession, useDisplayName } from '@/hooks/useSession'
-import { pbApi } from '@/lib/pocketbase'
+import { pb } from '@/lib/pocketbase'
 import { statusMeta } from '@/lib/gamciv'
 
 type RecentRow = {
@@ -47,13 +47,15 @@ export default function Home() {
     if (!session) return
     let alive = true
     ;(async () => {
-      const { data } = await pbApi
-        .from('complaints')
-        .select('tracking_no, title, status, created_at')
-        .order('created_at', { ascending: false })
-        .limit(3)
-      if (!alive) return
-      setRecent((data as unknown as RecentRow[]) ?? [])
+      try {
+        const page = await pb.collection('complaints').getList<RecentRow & { created?: string }>(1, 3, {
+          sort: '-created',
+        })
+        if (!alive) return
+        setRecent(page.items.map((item) => ({ ...item, created_at: item.created ?? '' })) ?? [])
+      } catch {
+        if (alive) setRecent([])
+      }
     })()
     return () => {
       alive = false

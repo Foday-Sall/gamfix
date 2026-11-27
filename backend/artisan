@@ -1,0 +1,15 @@
+#!/usr/bin/env php
+<?php
+
+// Laravel 12 artisan entry point (standard skeleton file).
+
+use Symfony\Component\Console\Input\ArgvInput;
+
+define('LARAVEL_START', microtime(true));
+
+require __DIR__.'/vendor/autoload.php';
+
+// Bootstrap Laravel and handle the command.
+$app = require_once __DIR__.'/bootstrap/app.php';
+
+exit($app->handleCommand(new ArgvInput));

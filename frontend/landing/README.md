@@ -15,6 +15,6 @@ npm install
 npm run dev
 ```
 
-`npm run build` in the repository root builds the whole site
-(`scripts/build-site.mjs`). To build this page on its own, run `npm run build`
+`npm run build` in the `frontend/` folder builds the whole site
+(`frontend/build-site.mjs`). To build this page on its own, run `npm run build`
 here.

@@ -9,7 +9,7 @@ const env = (globalThis as { process?: { env?: Record<string, string | undefined
 
 export default defineConfig({
   // The landing page owns the root of the site ("/"). The web app lives
-  // under /app (see scripts/build-site.mjs).
+  // under /app (see frontend/build-site.mjs).
   base: env.BASE_URL || "/",
   plugins: [react(), tailwindcss()],
   resolve: {

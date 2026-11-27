@@ -10,7 +10,7 @@ const env = (globalThis as { process?: { env?: Record<string, string | undefined
 
 export default defineConfig({
   // "/" when the web app is served on its own origin (`npm run dev`, a
-  // plain static host). The combined site build (scripts/build-site.mjs)
+  // plain static host). The combined site build (frontend/build-site.mjs)
   // passes BASE_URL=/app/ because the landing page owns the root there.
   base: env.BASE_URL || "/",
   // StyleX (staff console) runs first so its CSS is collected per entry:

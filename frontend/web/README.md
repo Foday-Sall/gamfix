@@ -45,6 +45,7 @@ Optional build-time overrides, for setups other than Vercel:
 
 ## Build
 
-`npm run build` in the repository root builds the whole site
-(`scripts/build-site.mjs`): this app is built with `BASE_URL=/app/` and ends up
-in `dist/app/`. To build this app on its own, run `npm run build` here.
+`npm run build` in the `frontend/` folder builds the whole site
+(`frontend/build-site.mjs`): this app is built with `BASE_URL=/app/` and ends
+up in `frontend/dist/app/`. To build this app on its own, run `npm run build`
+here.

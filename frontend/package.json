@@ -1,0 +1,14 @@
+{
+  "name": "gamfix-frontend",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "node build-site.mjs",
+    "dev": "npm run dev --prefix web",
+    "dev:landing": "npm run dev --prefix landing",
+    "preview": "node preview-site.mjs"
+  }
+}

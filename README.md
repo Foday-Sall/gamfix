@@ -5,7 +5,7 @@
 **Civic-tech platform for The Gambia: citizens report infrastructure problems (garbage, broken lights, damaged roads…) with photos and GPS, and staff of institutions process the reports until they are fixed.**
 
 [![Laravel](https://img.shields.io/badge/Laravel_12-FF2D20?style=flat-square&logo=laravel&logoColor=white)](https://laravel.com)
-[![PHP](https://img.shields.io/badge/PHP_8.2+-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
+[![PHP](https://img.shields.io/badge/PHP_8.2%2B-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
 [![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript_6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
@@ -47,11 +47,16 @@
 - **`backend/`** — the Laravel 12 JSON API: Sanctum tokens, Socialite (Google
   sign-in), Laravel Reverb (websocket realtime), MariaDB. Runs on the VPS.
   `backend/.env` is the only environment file in the project.
-- **`frontend/`** — the site, deployed on Vercel:
+- **`frontend/`** — the one frontend, deployed on Vercel as a single site
+  (one domain, one project):
   - **`landing/`** — static marketing page, served at `/`
   - **`web/`** — the one web app for everybody who signs in, served at `/app`:
     citizen screens and the staff console, one login page. The account
     decides which side opens.
+  - **`build-site.mjs`** — the build that merges landing and web app into one
+    deploy (`frontend/dist`); **`preview-site.mjs`** serves it locally exactly
+    like Vercel routes it; **`package.json`** holds the scripts (`npm run dev`,
+    `npm run dev:landing`, `npm run build`, `npm run preview`).
 - **`infra/docker/`** — one-command backend stack: gateway + api + reverb +
   mariadb + gowa + certbot
 - **`docs/`** — ARCHITECTURE.md, DEPLOY.md, VERCEL.md, API.md,
@@ -74,10 +79,20 @@ issued and renewed automatically by the bundled certbot service
 ### Frontend on Vercel (one click)
 
 Import this repository on Vercel — **one project, repository root, no
-settings, no environment variables**. Vercel runs `npm run build`
-(`scripts/build-site.mjs`) and takes `vercel.json` for everything else
+settings, no environment variables**. Vercel runs the commands in
+`vercel.json` (`cd frontend && npm install`, `cd frontend && npm run build`
+→ `frontend/build-site.mjs`) and takes `vercel.json` for everything else
 (routes, API proxy to the VPS, security headers). Every push to `main`
 deploys again → `docs/VERCEL.md`.
+
+What visitors get, all on the same domain:
+
+| Address | Content |
+| --- | --- |
+| `/` | landing page |
+| `/login` | the web app sign-in (redirects to `/app/login`) |
+| `/app` | citizen screens after sign-in |
+| `/app/dashboard` | staff console for officers and admins |
 
 ### Local development
 
@@ -87,10 +102,11 @@ cd backend
 cp .env.example .env && composer install && php artisan key:generate
 php artisan migrate --seed && php artisan serve          # http://127.0.0.1:8000
 
-# Frontend (Node 22+)
-cd frontend/web
-npm install && npm run dev                               # web app
-cd ../landing && npm install && npm run dev              # landing page
+# Frontend (Node 22+) — landing page + web app, one folder, one deploy
+cd frontend
+npm run dev            # web app (login, citizen screens)  http://localhost:5173
+npm run dev:landing    # landing page
+npm run build && npm run preview   # the whole site, routed exactly like Vercel
 ```
 
 Tests: `cd backend && php artisan test` (in-memory SQLite, no secrets

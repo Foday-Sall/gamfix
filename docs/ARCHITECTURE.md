@@ -62,9 +62,11 @@ Layers:
     `private-institution.{id}` and `private-admins`,
     with a 30-second poll as fallback.
 
-`scripts/build-site.mjs` at the repository root builds both into `dist/`
-(landing at the root, web app under `app/`); `vercel.json` routes the
-addresses and forwards `/api` to the VPS.
+`frontend/build-site.mjs` builds both into `frontend/dist` (landing at the
+root, web app under `app/`); `vercel.json` routes the addresses, forwards
+`/api` to the VPS and points install and build commands at the `frontend/`
+folder — the landing page and the web app deploy together as one frontend on
+one domain.
 
 ## Infra (`infra/docker/`)
 

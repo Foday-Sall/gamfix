@@ -1,28 +1,30 @@
 #!/usr/bin/env node
-// Builds the whole site into dist/ the way Vercel serves it:
+// Builds the whole GamFix frontend into dist/ the way Vercel serves it:
 //
 //   /                      landing page            (frontend/landing)
 //   /app/...               web app                 (frontend/web)
 //   /app/dashboard/...     staff console, same web app, second document
 //
-// Vercel runs this through `npm run build` (see vercel.json). The two
-// frontends keep their own package.json and lockfile; nothing is installed at
-// the repository root. To force a fresh install:  npm ci --prefix <frontend>
+// The landing page and the web app are ONE frontend in one folder with one
+// deploy. Vercel runs this through `cd frontend && npm run build` (see
+// vercel.json). The two apps keep their own package.json and lockfile;
+// nothing is installed at the repository root. To force a fresh install:
+// npm ci --prefix <app>
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const output = path.join(root, 'dist')
+const frontend = path.dirname(fileURLToPath(import.meta.url))
+const output = path.join(frontend, 'dist')
 
 const parts = [
-  { name: 'landing page', dir: path.join(root, 'frontend/landing'), base: '/', mount: '' },
-  { name: 'web app', dir: path.join(root, 'frontend/web'), base: '/app/', mount: 'app' },
+  { name: 'landing page', dir: path.join(frontend, 'landing'), base: '/', mount: '' },
+  { name: 'web app', dir: path.join(frontend, 'web'), base: '/app/', mount: 'app' },
 ]
 
 function run(command, args, cwd, env = {}) {
-  console.log(`\n$ ${command} ${args.join(' ')}   (${path.relative(root, cwd)})`)
+  console.log(`\n$ ${command} ${args.join(' ')}   (${path.relative(frontend, cwd)})`)
   execFileSync(command, args, { cwd, stdio: 'inherit', env: { ...process.env, ...env }, shell: process.platform === 'win32' })
 }
 

@@ -2,7 +2,7 @@
 // Local stand-in for Vercel: serves dist/ with the redirects and rewrites of
 // vercel.json, so the site can be checked exactly as Vercel will route it.
 //
-//   npm run build && npm run preview        -> http://localhost:4173
+//   cd frontend && npm run build && npm run preview   -> http://localhost:4173
 //
 // /api/* is proxied to the real backend (the first rewrite in vercel.json).
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
@@ -11,9 +11,10 @@ import { request as httpsRequest } from 'node:https'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const config = JSON.parse(readFileSync(path.join(root, 'vercel.json'), 'utf8'))
-const output = path.join(root, config.outputDirectory || 'dist')
+const frontend = path.dirname(fileURLToPath(import.meta.url))
+const repoRoot = path.resolve(frontend, '..')
+const config = JSON.parse(readFileSync(path.join(repoRoot, 'vercel.json'), 'utf8'))
+const output = path.join(repoRoot, config.outputDirectory || 'frontend/dist')
 const port = Number(process.env.PORT || 4173)
 const host = process.env.HOST || '127.0.0.1'
 

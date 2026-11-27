@@ -1,15 +1,17 @@
 # Deploying the site to Vercel
 
-The site is the landing page and the web app. It is built from the repository
-root with one command and needs no settings or environment variables on
-Vercel. The backend stays on the VPS (`docs/DEPLOY.md`).
+The site is the landing page and the web app — one frontend in `frontend/`,
+deployed as one project on one domain. It is built with one command and needs
+no settings or environment variables on Vercel. The backend stays on the VPS
+(`docs/DEPLOY.md`).
 
 ## Import (once)
 
 1. Vercel → **Add New… → Project** → import the `gamfix` repository.
 2. Leave **Root Directory** at the repository root (`./`).
-3. Click **Deploy**. Vercel runs `npm install` and `npm run build`
-   (`scripts/build-site.mjs`), and takes `vercel.json` for everything else.
+3. Click **Deploy**. Vercel runs the commands in `vercel.json`
+   (`cd frontend && npm install`, `cd frontend && npm run build` →
+   `frontend/build-site.mjs`), and takes `vercel.json` for everything else.
 
 Every push to `main` deploys again.
 
@@ -54,6 +56,7 @@ directly (`wss://51-44-152-213.sslip.io:443`). It reads that address from
 ## Check it locally
 
 ```bash
+cd frontend
 npm run build
 npm run preview        # http://localhost:4173 — same routing as Vercel, /api goes to the live backend
 ```

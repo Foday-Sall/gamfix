@@ -1,0 +1,78 @@
+# What the server answers, the same on HTTP and HTTPS. Rendered at container
+# start by entrypoint.sh (which replaces @@FRONTEND_URL@@); both servers
+# include the rendered /etc/nginx/gateway/locations.conf.
+
+# ---- Security headers, on every answer this server gives ----
+# The API serves JSON only, so its CSP allows nothing executable and nothing
+# to be framed; the frontend on Vercel sets its own (permissive for a React
+# SPA with fonts, map tiles and the Reverb websocket) in vercel.json.
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "no-referrer" always;
+add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
+add_header Cross-Origin-Opener-Policy "same-origin" always;
+add_header Cross-Origin-Resource-Policy "same-origin" always;
+add_header Cross-Origin-Embedder-Policy "require-corp" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()" always;
+add_header Cache-Control "no-store" always;
+# tls.conf.template sets server_tokens off for the https server; this file's
+# answers (API JSON, redirects) never reveal the version otherwise.
+
+
+# ---- Laravel API (JSON REST), served by php-fpm in the api container ----
+location /api/ {
+    set $api_upstream "api:9000";
+    fastcgi_pass $api_upstream;
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME /var/www/gamfix-api/public/index.php;
+    fastcgi_param SCRIPT_NAME /index.php;
+    fastcgi_read_timeout 360s;
+    fastcgi_buffering off;
+}
+
+location = /up {
+    set $api_upstream "api:9000";
+    fastcgi_pass $api_upstream;
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME /var/www/gamfix-api/public/index.php;
+    fastcgi_param SCRIPT_NAME /index.php;
+}
+
+# ---- Laravel Reverb websockets (pusher-js connects to /app/{key}) ----
+location /app/ {
+    set $reverb_upstream "reverb:8080";
+    proxy_pass http://$reverb_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_buffering off;
+}
+
+# ---- Let's Encrypt validation (certbot writes the answer under /var/www/certbot) ----
+location ^~ /.well-known/acme-challenge/ {
+    root /var/www/certbot;
+    default_type text/plain;
+    # No security headers on ACME answers (they are plain text responses to
+    # Let's Encrypt's servers); also nothing cached.
+    add_header Cross-Origin-Resource-Policy "same-origin" always;
+    add_header Cache-Control "no-store" always;
+}
+
+# ---- Everything else is the site, which lives on Vercel ----
+# Old addresses (https://51-44-152-213.sslip.io/login, /dash, ...) keep
+# working: the site redirects them to their new place.
+location / {
+    # Only the navigational redirect: browsers follow it to the frontend,
+    # which sends its own headers (vercel.json).
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Resource-Policy "same-origin" always;
+    return 302 @@FRONTEND_URL@@$request_uri;
+}

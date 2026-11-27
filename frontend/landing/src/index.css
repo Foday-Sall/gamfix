@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+:root {
+  /* "Sunrise over the river", a warm civic palette.
+     White paper, espresso ink, deep river green as the institutional
+     primary, gold for action highlights. Blue lives only in the flag and in
+     the third-party screens inside the phone (WhatsApp/SMS/Telegram). */
+  --background: #ffffff; /* White paper */
+  --foreground: #2a1b10; /* Espresso ink */
+  --card: #ffffff;
+  --card-foreground: #2a1b10;
+  --popover: #ffffff;
+  --popover-foreground: #2a1b10;
+  --primary: #146c43; /* Deep river green */
+  --primary-foreground: #ffffff;
+  --secondary: #f0e7d3; /* Deeper sand */
+  --secondary-foreground: #2a1b10;
+  --muted: #f3ebda; /* Warm wash */
+  --muted-foreground: #57503f; /* Warm gray-brown */
+  --accent: #d99a00; /* Gold, action highlight; dark text only, never white */
+  --accent-foreground: #26180c;
+  --destructive: #c0392b; /* Terracotta red */
+  --border: #e5dcc6;
+  --input: #e3d9c2;
+  --ring: #146c43;
+  --radius: 0.5rem;
+
+  /* Clay tones (reference language): washes and hairlines only, never text */
+  --clay: #a89478;
+  --clay-soft: rgba(168, 148, 120, 0.12);
+  --clay-fog: rgba(168, 148, 120, 0.18);
+  --clay-line: rgba(168, 148, 120, 0.38);
+
+  /* Named working colors */
+  --gold-deep: #9c6a00; /* icons/labels on white, 4.7:1 */
+  --terracotta: #a64b26; /* text-grade terracotta, 5.2:1 on sand */
+  --band: #123b29; /* deep green band background */
+  --band-cream: #f9f4e8;
+  --band-muted: #cbbfa8;
+  --fixed: #146c43; /* Fixed: success green = the one green, 6.5:1 with white */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-clay: var(--clay);
+  --color-clay-line: var(--clay-line);
+  --color-clay-soft: var(--clay-soft);
+  --color-clay-fog: var(--clay-fog);
+  --color-gold-deep: var(--gold-deep);
+  --color-terracotta: var(--terracotta);
+  --color-band: var(--band);
+  --color-band-cream: var(--band-cream);
+  --color-band-muted: var(--band-muted);
+  --color-fixed: var(--fixed);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Lexend", "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 17px;
+    line-height: 1.65;
+  }
+  ::selection {
+    background: var(--clay-fog);
+  }
+}
+
+@layer utilities {
+  /* Hairline in the clay tone for dividers that carry structure */
+  .hairline-t {
+    border-top: 1px solid var(--clay-line);
+  }
+  .hairline-b {
+    border-bottom: 1px solid var(--clay-line);
+  }
+  .tile-wash {
+    background: var(--clay-soft);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* PhoneCase device mockup: looping camera pill + gentle float.
+   Color drifts between espresso ink and deep river green (design tokens). */
+@keyframes phone-call-transition {
+  0% {
+    width: 26%;
+    background-color: #2a1b10;
+  }
+  100% {
+    width: 64%;
+    background-color: #146c43;
+  }
+}
+.phone-pill {
+  animation: phone-call-transition 1.9s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-pill {
+    animation: none;
+  }
+}
+.phone-shell {
+  animation: phone-shell-float 6s ease-in-out infinite alternate;
+}
+@keyframes phone-shell-float {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-shell {
+    animation: none;
+  }
+}
+/* Story-style progress segment for the active channel screen. Duration must
+   match SCREEN_DURATION in PhoneCase.tsx (2800ms per screen). */
+.phone-story-bar {
+  animation: phone-story-fill 2800ms linear forwards;
+}
+@keyframes phone-story-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-story-bar {
+    animation: none;
+    width: 100%;
+  }
+}

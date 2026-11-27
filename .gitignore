@@ -1,0 +1,21 @@
+# dependencies / builds
+node_modules/
+dist/
+dist-ssr/
+.vercel/
+.localserve/
+
+# secrets (never commit real credentials).
+# backend/.env holds every setting; infra/docker/.env is a tracked symlink to it.
+backend/.env
+gowa.env
+.env.local
+.env.*.local
+*.pem
+infra/docker/tls/
+
+# misc
+.DS_Store
+*.log
+playwright-report/
+test-results/

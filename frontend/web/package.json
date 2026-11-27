@@ -1,0 +1,49 @@
+{
+  "name": "gamfix-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@astryxdesign/core": "^0.7.14",
+    "@astryxdesign/theme-matcha": "^0.7.14",
+    "@stylexjs/stylex": "^0.19.2",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-query": "^5.108.4",
+    "browser-image-compression": "^2.0.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cn": "^0.5.0",
+    "framer-motion": "^14.3.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.72.0",
+    "next-themes": "^0.4.6",
+    "pusher-js": "^8.6.0",
+    "radix-ui": "^1.8.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4",
+    "recharts": "^3.8.0",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^4.3.3",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@stylexjs/unplugin": "^0.19.2",
+    "@types/leaflet": "^1.9.20",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.3.0",
+    "oxlint": "^1.81.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.8"
+  }
+}

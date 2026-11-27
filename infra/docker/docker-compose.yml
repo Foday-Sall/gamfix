@@ -1,0 +1,153 @@
+# GamFix backend stack: nginx gateway, Laravel API, Reverb websockets,
+# MariaDB and the GOWA WhatsApp gateway. The site itself (landing page and
+# web app) is deployed on Vercel (docs/VERCEL.md); this stack serves only the
+# API and the websockets and sends every other address to the site.
+#
+# Every setting comes from backend/.env. infra/docker/.env is a symlink to
+# that file, so Compose finds it too.
+#
+#   1) cp backend/.env.example backend/.env     then fill in CHANGE ME
+#   2) docker compose up -d --build
+#   3) link WhatsApp: open the GOWA QR page through an SSH tunnel:
+#        ssh -L 3001:127.0.0.1:3001 user@vps   ->   http://127.0.0.1:3001
+
+# Fixed project name: the data volumes are docker_<name> and survive a
+# rename of the folder.
+name: docker
+
+# Settings that differ inside the containers. They are set here and win over
+# the values in backend/.env.
+x-backend-environment: &backend-environment
+  APP_ENV: production
+  APP_DEBUG: "false"
+  DB_CONNECTION: mysql
+  DB_HOST: mariadb
+  DB_PORT: "3306"
+  # The API publishes events straight to the websocket container. Browsers
+  # use REVERB_PUBLIC_* from backend/.env instead (served by GET /api/config).
+  REVERB_HOST: reverb
+  REVERB_PORT: "8080"
+  REVERB_SCHEME: http
+  REVERB_SERVER_HOST: 0.0.0.0
+  REVERB_SERVER_PORT: "8080"
+
+x-backend: &backend
+  env_file:
+    - ../../backend/.env
+  restart: unless-stopped
+
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/gateway.Dockerfile
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${TLS_PORT:-443}:443"
+    environment:
+      # Where every non-API address is sent (the site on Vercel).
+      FRONTEND_URL: ${APP_FRONTEND_URL:?set APP_FRONTEND_URL in backend/.env}
+      # Host name of the TLS certificate. Empty = HTTP only.
+      TLS_HOST: ${TLS_HOST:-}
+    volumes:
+      # Certificate placed by hand (optional; see docs/DEPLOY.md).
+      - ./tls:/etc/nginx/tls:ro
+      # Certificate issued and renewed by the certbot container.
+      - certbot_letsencrypt:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot
+    depends_on:
+      - api
+      - reverb
+    restart: unless-stopped
+
+  api:
+    <<: *backend
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    # Explicit name so reverb can reuse this image without building it again.
+    image: docker-api
+    environment:
+      <<: *backend-environment
+      # Only this container owns schema setup (no concurrent migrations).
+      RUN_MIGRATIONS: "1"
+      GOWA_BASE_URL: http://gowa:3000
+      GOWA_BASIC_AUTH: ${GOWA_USER:-gowa}:${GOWA_PASS:?set GOWA_PASS in backend/.env}
+    volumes:
+      - api_storage:/var/www/gamfix-api/storage
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      # Ready = the app can actually talk to its database.
+      test: ["CMD-SHELL", "php artisan db:monitor --databases=mysql || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  reverb:
+    <<: *backend
+    # Same image as api (the websocket server IS the Laravel app).
+    image: docker-api
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    environment:
+      <<: *backend-environment
+    depends_on:
+      api:
+        condition: service_healthy
+
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE:-gamfix}
+      MARIADB_USER: ${DB_USERNAME:-gamfix}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in backend/.env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in backend/.env}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  gowa:
+    image: aldinokemal2104/go-whatsapp-web-multidevice:latest
+    command: ["rest"]
+    environment:
+      APP_BASIC_AUTH: ${GOWA_USER:-gowa}:${GOWA_PASS:?set GOWA_PASS in backend/.env}
+      APP_PORT: 3000
+      APP_DEBUG: "false"
+      APP_OS: Chrome
+      WHATSAPP_ACCOUNT_VALIDATION: "false"
+    volumes:
+      - gowa_statics:/app/statics
+      - gowa_storages:/app/storages
+    # Bound to localhost only — reach the QR page through an SSH tunnel.
+    ports:
+      - "127.0.0.1:${GOWA_PORT:-3001}:3000"
+    restart: unless-stopped
+
+  # Issues the TLS certificate on first start and renews it (Let's Encrypt,
+  # through the gateway). Sleeps when TLS_HOST is empty.
+  certbot:
+    image: certbot/certbot:latest
+    env_file:
+      - ../../backend/.env
+    volumes:
+      - certbot_letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+      - ./certbot/renew.sh:/renew.sh:ro
+    entrypoint: ["/bin/sh", "/renew.sh"]
+    restart: unless-stopped
+
+volumes:
+  api_storage:
+  mariadb_data:
+  gowa_statics:
+  gowa_storages:
+  certbot_letsencrypt:
+  certbot_webroot:

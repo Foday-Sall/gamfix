@@ -1,0 +1,54 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "redirects": [
+    { "source": "/login", "destination": "/app/login", "permanent": true },
+    { "source": "/signup", "destination": "/app/signup", "permanent": true },
+    { "source": "/forgot-password", "destination": "/app/forgot-password", "permanent": true },
+    { "source": "/reset-password", "destination": "/app/reset-password", "permanent": true },
+    { "source": "/verify/:path*", "destination": "/app/verify/:path*", "permanent": true },
+    { "source": "/onboarding", "destination": "/app/onboarding", "permanent": true },
+    { "source": "/home", "destination": "/app/home", "permanent": true },
+    { "source": "/report", "destination": "/app/report", "permanent": true },
+    { "source": "/track", "destination": "/app/track", "permanent": true },
+    { "source": "/profile", "destination": "/app/profile", "permanent": true },
+    { "source": "/my-reports", "destination": "/app/my-reports", "permanent": true },
+    { "source": "/institute", "destination": "/app/dashboard", "permanent": true },
+    { "source": "/dash", "destination": "/app/dashboard", "permanent": true },
+    { "source": "/dash/:path*", "destination": "/app/dashboard/:path*", "permanent": true },
+    { "source": "/admin", "destination": "/app/dashboard", "permanent": true },
+    { "source": "/admin/:path*", "destination": "/app/dashboard/:path*", "permanent": true },
+    { "source": "/dashboard", "destination": "/app/dashboard", "permanent": true },
+    { "source": "/dashboard/:path*", "destination": "/app/dashboard/:path*", "permanent": true },
+    { "source": "/landing", "destination": "/", "permanent": true },
+    { "source": "/landing/:path*", "destination": "/", "permanent": true }
+  ],
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://51-44-152-213.sslip.io/api/:path*" },
+    { "source": "/app/dashboard", "destination": "/app/dashboard/index.html" },
+    { "source": "/app/dashboard/:path*", "destination": "/app/dashboard/index.html" },
+    { "source": "/app", "destination": "/app/index.html" },
+    { "source": "/app/:path*", "destination": "/app/index.html" },
+    { "source": "/privacy", "destination": "/index.html" },
+    { "source": "/terms", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "credentialless" },
+        { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self), payment=(), usb=(), interest-cohort=()" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://51-44-152-213.sslip.io https://*.googleusercontent.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org; connect-src 'self' https://51-44-152-213.sslip.io wss://51-44-152-213.sslip.io:443 https://*.vercel-insights.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'; upgrade-insecure-requests" }
+      ]
+    }
+  ]
+}

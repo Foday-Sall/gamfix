@@ -1,0 +1,15 @@
+# What the backend images do not need. backend/.env must never be baked into
+# an image, and the frontends are deployed on Vercel, not built here.
+# Tests run on demand (volume-mounted at deploy time) and never ship.
+.git
+.vercel
+**/node_modules
+**/dist
+backend/.env
+backend/tests
+backend/phpunit.xml
+infra/docker/.env
+infra/docker/tls
+**/*.pem
+frontend
+docs

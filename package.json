@@ -1,0 +1,12 @@
+{
+  "name": "gamfix",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "node scripts/build-site.mjs",
+    "preview": "node scripts/preview-site.mjs"
+  }
+}
